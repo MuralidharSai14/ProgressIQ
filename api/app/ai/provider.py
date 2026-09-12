@@ -311,38 +311,33 @@ class MockAIProvider:
 
 class GeminiAIProvider:
     """
-    Google Gemini API provider.
+    Google Gemini API provider using lightweight native REST HTTP client.
     Requires GEMINI_API_KEY in .env and AI_PROVIDER=gemini.
     """
     name = "gemini"
 
     def __init__(self):
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.gemini_api_key)
-            
-            # Select working model with fallbacks
-            self.model = None
-            for model_name in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.5-flash", "gemini-2.5-flash-lite"]:
-                try:
-                    self.model = genai.GenerativeModel(model_name)
-                    break
-                except Exception:
-                    continue
-            
-            if self.model is None:
-                self.model = genai.GenerativeModel("gemini-3.6-flash")
-                
-            self._available = True
-        except Exception as e:
-            logger.warning(f"Failed to initialize Gemini AI: {e}")
-            self._available = False
-            self._fallback = MockAIProvider()
+        self._available = bool(settings.gemini_api_key)
+        self.api_key = settings.gemini_api_key
+        self.model_name = "gemini-1.5-flash"
 
-    def _sync_generate(self, prompt: str) -> str:
-        """Helper to run synchronous Gemini generation."""
-        response = self.model.generate_content(prompt)
-        return response.text.strip()
+    async def _async_generate(self, prompt: str) -> str:
+        """Call Gemini REST API directly without heavy grpc dependencies."""
+        import httpx
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}]
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            candidates = data.get("candidates", [])
+            if candidates and "content" in candidates[0]:
+                parts = candidates[0]["content"].get("parts", [])
+                if parts and "text" in parts[0]:
+                    return parts[0]["text"].strip()
+            return ""
 
     async def extract_field_update(self, text: str) -> dict:
         if not self._available or not settings.gemini_api_key:
@@ -378,9 +373,8 @@ Return ONLY a valid JSON object with these exact keys (use null for missing valu
 Return ONLY the JSON object. No explanations.
 """
         try:
-            # Run in thread pool with 9-second timeout to prevent frontend hangs
             raw = await asyncio.wait_for(
-                asyncio.to_thread(self._sync_generate, prompt),
+                self._async_generate(prompt),
                 timeout=9.0
             )
             # Strip markdown code fences if present
@@ -421,7 +415,7 @@ Return ONLY a JSON array of strings. No markdown.
 """
         try:
             raw = await asyncio.wait_for(
-                asyncio.to_thread(self._sync_generate, prompt),
+                self._async_generate(prompt),
                 timeout=9.0
             )
             if raw.startswith("```"):
