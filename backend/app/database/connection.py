@@ -12,14 +12,15 @@ settings = get_settings()
 import os
 
 def get_engine_and_url():
-    url = settings.database_url
+    raw_url = str(getattr(settings, "database_url", "") or "").strip().strip("'\"")
+    url = raw_url
     connect_args = {}
 
-    if "sqlite" in url:
+    if not url or url.startswith("sqlite") or url == ":memory:":
         if os.environ.get("VERCEL") or "/var/task" in os.getcwd():
             url = "sqlite+aiosqlite:////tmp/progressiq.db"
-        elif url.startswith("sqlite:///"):
-            url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+        else:
+            url = "sqlite+aiosqlite:///./progressiq.db"
         connect_args["check_same_thread"] = False
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
@@ -30,13 +31,18 @@ def get_engine_and_url():
     if "sqlite" not in url:
         pool_kwargs["pool_recycle"] = 300
 
-    eng = create_async_engine(
-        url,
-        echo=False,
-        connect_args=connect_args,
-        **pool_kwargs,
-    )
-    return eng, url
+    try:
+        eng = create_async_engine(
+            url,
+            echo=False,
+            connect_args=connect_args,
+            **pool_kwargs,
+        )
+        return eng, url
+    except Exception as e:
+        fallback_url = "sqlite+aiosqlite:////tmp/progressiq.db" if (os.environ.get("VERCEL") or "/var/task" in os.getcwd()) else "sqlite+aiosqlite:///./progressiq.db"
+        eng = create_async_engine(fallback_url, echo=False, connect_args={"check_same_thread": False}, pool_pre_ping=True)
+        return eng, fallback_url
 
 engine, _active_db_url = get_engine_and_url()
 
