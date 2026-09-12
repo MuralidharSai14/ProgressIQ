@@ -1,10 +1,18 @@
 import sys
 import os
 
-# Add backend directory to path
-backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend")
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+possible_backend_paths = [
+    os.path.join(current_dir, "backend"),
+    os.path.join(current_dir, "..", "backend"),
+    os.path.join(os.getcwd(), "backend"),
+    os.path.join(os.getcwd(), "api", "backend"),
+    os.path.join("/var/task", "backend"),
+]
+
+for p in possible_backend_paths:
+    if os.path.exists(p) and p not in sys.path:
+        sys.path.insert(0, p)
 
 try:
     from main import app
@@ -19,5 +27,10 @@ except Exception as e:
     async def catch_all(path_name: str):
         return JSONResponse(
             status_code=500,
-            content={"error": "Backend initialization error", "detail": str(e), "traceback": err_trace}
+            content={
+                "error": "Backend initialization error",
+                "detail": str(e),
+                "cwd": os.getcwd(),
+                "traceback": err_trace
+            }
         )
