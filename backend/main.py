@@ -44,18 +44,17 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Runs on startup and shutdown."""
     logger.info("🚀 PROGRESSIQ Multi-User Backend Starting...")
-    logger.info(f"   AI Provider: {settings.ai_provider}")
-    logger.info(f"   Database:    {settings.database_url}")
-    logger.info(f"   Storage:     {settings.storage_provider}")
-    logger.info(f"   Confidence Threshold: {settings.confidence_threshold}%")
-    
-    # 1. Initialize Database Tables
-    await create_all_tables()
-    logger.info("✅ Database tables ready")
+    try:
+        # 1. Initialize Database Tables
+        await create_all_tables()
+        logger.info("✅ Database tables ready")
 
-    # 2. Seed Default Test User Accounts (Admin, PM, Site Engineer, Viewer)
-    async with AsyncSessionLocal() as db:
-        await seed_default_users(db)
+        # 2. Seed Default Test User Accounts (Admin, PM, Site Engineer, Viewer)
+        async with AsyncSessionLocal() as db:
+            await seed_default_users(db)
+        logger.info("✅ Default test users ready")
+    except Exception as e:
+        logger.warning(f"⚠️ Startup database initialization note: {e}")
     
     yield
     logger.info("🛑 PROGRESSIQ Backend Shutting down...")
@@ -75,10 +74,16 @@ app = FastAPI(
 )
 
 # ── Static Uploads Mount ──────────────────────────────────────────────────────
-# Serves uploaded photographs, PDFs, and inspection records persistently
-upload_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), settings.storage_local_dir)
-os.makedirs(upload_path, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
+if os.environ.get("VERCEL") or "/var/task" in os.getcwd():
+    upload_path = "/tmp/uploads"
+else:
+    upload_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), settings.storage_local_dir)
+
+try:
+    os.makedirs(upload_path, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
+except Exception as e:
+    logger.warning(f"Static uploads mount note: {e}")
 
 # ── CORS Configuration ────────────────────────────────────────────────────────
 # Supports multi-device access (laptop, phone, tablet, cloud preview, different Wi-Fi/cellular)
@@ -100,26 +105,44 @@ else:
         allow_headers=["*"],
     )
 
-# ── Register API Routes ───────────────────────────────────────────────────────
-app.include_router(health.router,        prefix="/api",        tags=["Health"])
-app.include_router(auth.router,          prefix="/api",        tags=["Authentication"])
-app.include_router(projects.router,      prefix="/api",        tags=["Projects"])
-app.include_router(schedule.router,      prefix="/api",        tags=["Schedule"])
-app.include_router(field_reports.router, prefix="/api",        tags=["Field Reports"])
-app.include_router(field_updates.router, prefix="/api",        tags=["Live Field Updates"])
-app.include_router(ai_routes.router,     prefix="/api",        tags=["AI Extraction"])
-app.include_router(matching.router,      prefix="/api",        tags=["Activity Matching"])
-app.include_router(dashboard.router,     prefix="/api",        tags=["Dashboard"])
-app.include_router(demo.router,          prefix="/api",        tags=["Demo"])
-app.include_router(evidence.router,      prefix="/api",        tags=["Evidence"])
-app.include_router(consistency.router,   prefix="/api",        tags=["Consistency"])
-app.include_router(verification.router,  prefix="/api",        tags=["Verification"])
-app.include_router(audit.router,         prefix="/api",        tags=["Audit"])
-app.include_router(logistics.router,     prefix="/api",        tags=["Material Logistics"])
-app.include_router(safety.router,        prefix="/api",        tags=["Worker Safety"])
-app.include_router(events.router,        prefix="/api",        tags=["Real-Time Events"])
-app.include_router(evm.router,           prefix="/api",        tags=["EVM & S-Curve"])
-app.include_router(copilot.router,       prefix="/api",        tags=["AI Copilot"])
+# Direct root health endpoints
+@app.get("/")
+@app.get("/health")
+@app.get("/api/health")
+async def root_health():
+    return {
+        "status": "healthy",
+        "app": "PROGRESSIQ",
+        "version": "2.0.0",
+        "serverless": bool(os.environ.get("VERCEL"))
+    }
+
+# ── Register API Routes (Both /api prefix and root for universal cloud routing) ─
+all_routers = [
+    (health.router, "Health"),
+    (auth.router, "Authentication"),
+    (projects.router, "Projects"),
+    (schedule.router, "Schedule"),
+    (field_reports.router, "Field Reports"),
+    (field_updates.router, "Live Field Updates"),
+    (ai_routes.router, "AI Extraction"),
+    (matching.router, "Activity Matching"),
+    (dashboard.router, "Dashboard"),
+    (demo.router, "Demo"),
+    (evidence.router, "Evidence"),
+    (consistency.router, "Consistency"),
+    (verification.router, "Verification"),
+    (audit.router, "Audit"),
+    (logistics.router, "Material Logistics"),
+    (safety.router, "Worker Safety"),
+    (events.router, "Real-Time Events"),
+    (evm.router, "EVM & S-Curve"),
+    (copilot.router, "AI Copilot"),
+]
+
+for r, tag in all_routers:
+    app.include_router(r, prefix="/api", tags=[tag])
+    app.include_router(r, tags=[tag])
 
 
 

@@ -9,23 +9,32 @@ from app.config import get_settings
 
 settings = get_settings()
 
+import os
+
 def get_engine_and_url():
     url = settings.database_url
     connect_args = {}
 
-    if url.startswith("sqlite:///"):
-        url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+    if "sqlite" in url:
+        if os.environ.get("VERCEL") or "/var/task" in os.getcwd():
+            url = "sqlite+aiosqlite:////tmp/progressiq.db"
+        elif url.startswith("sqlite:///"):
+            url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
         connect_args["check_same_thread"] = False
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    elif url.startswith("postgresql://"):
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    pool_kwargs = {"pool_pre_ping": True}
+    if "sqlite" not in url:
+        pool_kwargs["pool_recycle"] = 300
 
     eng = create_async_engine(
         url,
         echo=False,
         connect_args=connect_args,
-        pool_pre_ping=True,
+        **pool_kwargs,
     )
     return eng, url
 
