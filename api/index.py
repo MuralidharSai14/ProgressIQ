@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-app = FastAPI(
+fastapi_app = FastAPI(
     title="PROGRESSIQ API",
     version="2.0.0",
     docs_url="/api/docs",
@@ -34,7 +34,7 @@ app = FastAPI(
 )
 
 # CORS
-app.add_middleware(
+fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"^https?://.*$",
     allow_credentials=True,
@@ -43,9 +43,9 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-@app.get("/health")
-@app.get("/api/health")
+@fastapi_app.get("/")
+@fastapi_app.get("/health")
+@fastapi_app.get("/api/health")
 async def root_health_check():
     return {
         "status": "healthy",
@@ -79,13 +79,16 @@ all_routers = [
 ]
 
 for r, tag in all_routers:
-    app.include_router(r, prefix="/api", tags=[tag])
-    app.include_router(r, tags=[tag])
+    fastapi_app.include_router(r, prefix="/api", tags=[tag])
+    fastapi_app.include_router(r, tags=[tag])
 
 try:
     from mangum import Mangum
-    handler = Mangum(app, lifespan="off")
-except Exception:
+    app = Mangum(fastapi_app, lifespan="off")
     handler = app
+except Exception:
+    app = fastapi_app
+    handler = app
+
 
 
