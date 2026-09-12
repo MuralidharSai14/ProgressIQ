@@ -3,7 +3,12 @@ PROGRESSIQ — Schedule Processor
 Parses Excel (.xlsx, .xls), CSV, and JSON files into normalized ScheduleActivity dictionaries.
 Provides comprehensive row-by-row validation and detailed import diagnostics without silently discarding rows.
 """
-import pandas as pd
+try:
+    import pandas as pd
+    _pandas_available = True
+except ImportError:
+    pd = None
+    _pandas_available = False
 import json
 import io
 import logging

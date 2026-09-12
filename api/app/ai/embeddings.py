@@ -13,7 +13,12 @@ We use the "all-MiniLM-L6-v2" model from sentence-transformers.
 It runs LOCALLY — no API key needed. First run downloads the model (~90MB).
 """
 import json
-import numpy as np
+try:
+    import numpy as np
+    _numpy_available = True
+except ImportError:
+    np = None
+    _numpy_available = False
 from typing import Optional
 import logging
 
