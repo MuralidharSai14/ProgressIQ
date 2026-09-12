@@ -1,0 +1,119 @@
+DAILY PROGRESS REPORT
+Indravati River Pumping Station Project
+Date: 05 September 2026
+Report No: DPR-2026-248
+Submitted by: Site Engineer, Civil Division
+
+=====================================================
+SECTION 1 — PUMP HOUSE CIVIL WORKS
+=====================================================
+
+1.1 Foundation Work:
+Pump house foundation work is progressing very slowly due to continued material delivery issues. 
+Reinforcement steel bars (Fe-500) for the grade beam casting have been only partially delivered.
+Out of required 28 MT, only 18 MT has arrived at site. Supplier has promised balance delivery by 
+September 12, 2026, but this has already been delayed twice. Current foundation progress stands at 
+approximately 72% against the planned 100% as on date. Concrete casting for the grade beam could 
+not be completed and only 55% of planned casting is done.
+
+1.2 Column Construction (Level 1):
+Column concreting on Axis-A has been completed (100%). However, column concreting on Axis-B is only 
+60% complete against the planned 100%. Delay is attributed to formwork material shortage — the 
+contractor's formwork has not been returned from the other ongoing site at Sector-IV. Estimated 
+completion by Sept 10, 2026 if formwork is returned in time.
+
+1.3 Roof Slab Works:
+Roof slab shuttering has not commenced as planned. No progress as the structural drawing revision 
+(Rev-3) from Design is pending approval from the PMC. Only 38% of planned progress achieved.
+Equipment (concrete batching plant) is also under maintenance and will be available from September 8.
+
+=====================================================
+SECTION 2 — RISING MAIN PIPELINE
+=====================================================
+
+2.1 Trench Excavation:
+Pipeline trench excavation from Km 0 to Km 2.0 is substantially complete. Work at Km 2+000 to 
+Km 4+000 is ongoing. Overall trench excavation is at 90% of plan.
+
+2.2 Pipe Laying — 600mm MS Pipes:
+Pipe laying has been severely affected by delay in pipe delivery from the manufacturer 
+(M/s Jindal Pipes, Raipur). Out of 480 pipes required for Phase-1, only 112 pipes have been 
+delivered to site as of today. The manufacturing delay is attributed to a machine breakdown at 
+the factory. Pipe laying is currently at 22% against the planned 60%. This is a critical delay. 
+First 200 metres of pipe laying completed from Km 0+000 to Km 0+200. Further laying is stalled.
+
+2.3 Thrust Block Construction:
+Thrust block work has not been started as pipe laying is incomplete. Planned progress was 35% 
+but actual is only 10%.
+
+=====================================================
+SECTION 3 — PUMP INSTALLATION
+=====================================================
+
+3.1 Pump Foundation:
+Pump foundation concrete casting is progressing but behind schedule. Civil work is at 55% 
+against planned 80%. Reason: RCC design for pump pedestal was revised and contractor received 
+the revised drawing only on September 3, 2026. This caused a delay of 12 days.
+
+3.2 Pump Delivery:
+Main centrifugal pumps (4 nos.) have been supplied by M/s Kirloskar Brothers Limited. 
+2 out of 4 pumps have been delivered to site. Remaining 2 pumps are expected by September 15, 2026.
+Overall pump supply delivery at 48% against planned 70%.
+
+3.3 Pump Installation:
+Pump installation and alignment work is at 5% as pump foundation is still incomplete. 
+Planned progress was 30%.
+
+=====================================================
+SECTION 4 — ELECTRICAL WORKS
+=====================================================
+
+4.1 HT Line Erection:
+HT line erection is on track. 50% of erection complete against planned 60%. Minor variation 
+is expected to be recovered.
+
+4.2 Transformer Installation:
+Transformer has been delivered to site and civil foundation is ready. Installation work will 
+commence on September 8, 2026. Current progress 20% against planned 25% — on track.
+
+4.3 LT Panel & MCC:
+Not started as transformer installation is pending. Planned progress 10%, actual 5%.
+
+=====================================================
+SECTION 5 — INTAKE STRUCTURE
+=====================================================
+
+5.1 Screen Chamber Walls:
+Screen chamber wall construction is progressing well. Currently at 70% against planned 85%.
+Slight shortfall due to heavy rainfall during August 28-31 (78mm recorded).
+
+5.2 Stop Log Gate Delivery:
+Stop log gate has not been delivered. Order was placed with M/s Triveni Engineering in July 2026 
+but delivery is stuck due to transportation clearance issues. Supply at 25% of planned 60%.
+This is likely to delay screen chamber completion.
+
+=====================================================
+SECTION 6 — UPCOMING ACTIVITIES
+=====================================================
+
+- Roof slab shuttering to begin after drawing approval (expected Sept 10)
+- Balance pipe delivery and resumption of pipe laying (expected Sept 12)  
+- Pump installation to commence once foundation complete (expected Sept 18)
+- Stop log gate erection (dependent on delivery clearance)
+- SCADA system site readiness inspection scheduled for Sept 20
+
+=====================================================
+SECTION 7 — MAJOR ISSUES & RISKS
+=====================================================
+
+1. CRITICAL: MS pipe delivery delay (manufacturer machine breakdown) causing pipeline delay
+2. HIGH: Drawing revision pending for roof slab — halting critical path work  
+3. HIGH: Stop log gate transportation clearance — could delay intake commissioning
+4. MEDIUM: Reinforcement steel shortage — partial impact on grade beam work
+5. MEDIUM: Pump foundation drawing revision — delay in pump installation start
+
+Project Manager's Note: The project is running approximately 14% behind overall planned progress.
+Immediate intervention required on material procurement for pipes and contractor performance on pump house structure.
+
+Prepared by: R.K. Sharma, Site Engineer
+Reviewed by: D.P. Nair, Project Manager
