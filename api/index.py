@@ -1,11 +1,8 @@
 """
 PROGRESSIQ — Vercel Serverless Entry Point
-Uses http.server.BaseHTTPRequestHandler wrapping FastAPI via WSGI bridge.
 """
 import os
 import sys
-import json
-import io
 import logging
 
 # ── Path setup ────────────────────────────────────────────────────────────────
@@ -19,6 +16,7 @@ logger = logging.getLogger(__name__)
 # ── Build FastAPI app ─────────────────────────────────────────────────────────
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 fastapi_app = FastAPI(
     title="PROGRESSIQ API",
@@ -35,41 +33,6 @@ fastapi_app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Register all routers ──────────────────────────────────────────────────────
-try:
-    from app.api import (
-        health, auth, projects, schedule, field_reports, field_updates,
-        ai_routes, matching, dashboard, demo, evidence, consistency,
-        verification, audit, logistics, safety, events, evm, copilot
-    )
-    _routers = [
-        (health.router,        "Health"),
-        (auth.router,          "Authentication"),
-        (projects.router,      "Projects"),
-        (schedule.router,      "Schedule"),
-        (field_reports.router, "Field Reports"),
-        (field_updates.router, "Live Field Updates"),
-        (ai_routes.router,     "AI Extraction"),
-        (matching.router,      "Activity Matching"),
-        (dashboard.router,     "Dashboard"),
-        (demo.router,          "Demo"),
-        (evidence.router,      "Evidence"),
-        (consistency.router,   "Consistency"),
-        (verification.router,  "Verification"),
-        (audit.router,         "Audit"),
-        (logistics.router,     "Material Logistics"),
-        (safety.router,        "Worker Safety"),
-        (events.router,        "Real-Time Events"),
-        (evm.router,           "EVM & S-Curve"),
-        (copilot.router,       "AI Copilot"),
-    ]
-    for router, tag in _routers:
-        fastapi_app.include_router(router, prefix="/api", tags=[tag])
-        fastapi_app.include_router(router, tags=[tag])
-    logger.warning("All routers registered successfully.")
-except Exception as e:
-    logger.error(f"Router registration error: {e}", exc_info=True)
-
 
 @fastapi_app.get("/")
 @fastapi_app.get("/health")
@@ -78,6 +41,56 @@ async def root_health():
     return {"status": "healthy", "app": "PROGRESSIQ", "version": "2.0.0"}
 
 
-# ── WSGI bridge via a2wsgi ────────────────────────────────────────────────────
+# ── Register routers one-by-one so a single failure doesn't kill the rest ────
+_ROUTER_MODULES = [
+    ("app.api.health",        "health"),
+    ("app.api.auth",          "auth"),
+    ("app.api.projects",      "projects"),
+    ("app.api.schedule",      "schedule"),
+    ("app.api.field_reports", "field_reports"),
+    ("app.api.field_updates", "field_updates"),
+    ("app.api.ai_routes",     "ai_routes"),
+    ("app.api.matching",      "matching"),
+    ("app.api.dashboard",     "dashboard"),
+    ("app.api.demo",          "demo"),
+    ("app.api.evidence",      "evidence"),
+    ("app.api.consistency",   "consistency"),
+    ("app.api.verification",  "verification"),
+    ("app.api.audit",         "audit"),
+    ("app.api.logistics",     "logistics"),
+    ("app.api.safety",        "safety"),
+    ("app.api.events",        "events"),
+    ("app.api.evm",           "evm"),
+    ("app.api.copilot",       "copilot"),
+]
+
+_router_errors = {}
+
+for module_path, attr in _ROUTER_MODULES:
+    try:
+        import importlib
+        mod = importlib.import_module(module_path)
+        router = getattr(mod, "router")
+        fastapi_app.include_router(router, prefix="/api")
+        fastapi_app.include_router(router)
+    except Exception as exc:
+        _router_errors[module_path] = str(exc)
+        logger.error(f"Router load failed [{module_path}]: {exc}", exc_info=True)
+
+if _router_errors:
+    logger.error(f"Failed routers: {list(_router_errors.keys())}")
+
+
+@fastapi_app.get("/api/debug/routers")
+async def debug_routers():
+    """Diagnostic: shows which routers failed to load."""
+    return {
+        "router_errors": _router_errors,
+        "total_routes": len(fastapi_app.routes),
+        "failed_count": len(_router_errors),
+    }
+
+
+# ── WSGI bridge ────────────────────────────────────────────────────────────────
 from a2wsgi import ASGIMiddleware
 app = ASGIMiddleware(fastapi_app)
