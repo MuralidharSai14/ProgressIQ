@@ -448,7 +448,7 @@ export default function Header({
                       <p className="font-bold text-xs text-white truncate">{user.full_name}</p>
                       <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
                       <span className="inline-block mt-1 text-[9px] px-1.5 py-0.2 rounded font-mono uppercase bg-blue-500/20 text-blue-300">
-                        {user.role.replace('_', ' ')}
+                        {user.role ? user.role.replace('_', ' ') : 'USER'}
                       </span>
                     </div>
 

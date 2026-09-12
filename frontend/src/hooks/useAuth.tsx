@@ -103,12 +103,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string): Promise<UserProfile> => {
     const res = await apiService.login({ email, password })
+    if (!res || !res.access_token || !res.user) {
+      throw new Error((res as any)?.detail || (res as any)?.error || (res as any)?.message || 'Authentication failed. Please verify server connection.')
+    }
     const { access_token, user: loggedUser } = res
     setToken(access_token)
     setUser(loggedUser)
     localStorage.setItem('progressiq_token', access_token)
     localStorage.setItem('progressiq_user', JSON.stringify(loggedUser))
-    if (loggedUser.role) {
+    if (loggedUser?.role) {
       localStorage.setItem('progressiq_role', loggedUser.role)
     }
     return loggedUser
@@ -116,12 +119,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = async (data: { email: string; password: string; full_name: string; role?: string; organization?: string }): Promise<UserProfile> => {
     const res = await apiService.register(data)
+    if (!res || !res.access_token || !res.user) {
+      throw new Error((res as any)?.detail || (res as any)?.error || (res as any)?.message || 'Registration failed.')
+    }
     const { access_token, user: newUser } = res
     setToken(access_token)
     setUser(newUser)
     localStorage.setItem('progressiq_token', access_token)
     localStorage.setItem('progressiq_user', JSON.stringify(newUser))
-    if (newUser.role) {
+    if (newUser?.role) {
       localStorage.setItem('progressiq_role', newUser.role)
     }
     return newUser

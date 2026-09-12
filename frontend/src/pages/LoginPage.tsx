@@ -55,7 +55,7 @@ export default function LoginPage() {
     setQuickLoading(acc.email)
     try {
       const user = await quickLoginAs(acc.email, acc.password)
-      success(`Logged in as ${acc.name} (${user.role})`)
+      success(`Logged in as ${acc.name} (${user?.role || 'User'})`)
       navigate('/')
     } catch (err: any) {
       error(err.message || 'Quick login failed')
