@@ -60,8 +60,8 @@ for r, tag in all_routers:
     fastapi_app.include_router(r, tags=[tag])
 
 try:
-    from mangum import Mangum
-    app = Mangum(fastapi_app, lifespan="off")
+    from a2wsgi import ASGIMiddleware
+    app = ASGIMiddleware(fastapi_app)
 except Exception:
     app = fastapi_app
 
