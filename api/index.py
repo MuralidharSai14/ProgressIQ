@@ -82,3 +82,10 @@ for r, tag in all_routers:
     app.include_router(r, prefix="/api", tags=[tag])
     app.include_router(r, tags=[tag])
 
+try:
+    from mangum import Mangum
+    handler = Mangum(app, lifespan="off")
+except Exception:
+    handler = app
+
+
