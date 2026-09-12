@@ -54,17 +54,7 @@ const DEFAULT_TEMPLATES: IndustryTemplate[] = [
     activities_count: 22,
     icon: "construction",
   },
-  {
-    id: "software",
-    name: "NextGen Enterprise Cloud Platform",
-    category: "Software & Information Technology",
-    organization: "Synapse Digital Solutions",
-    location: "Global / Multi-Region Cloud (AWS & GCP)",
-    description: "Microservices APIs, OAuth2 RBAC, React UI, AI vector search pipeline, automated CI/CD, and SOC2 audit.",
-    badge: "IT & Software",
-    activities_count: 18,
-    icon: "software",
-  },
+
   {
     id: "energy",
     name: "SuryaKiran 50MW Solar Power Plant",
@@ -543,7 +533,6 @@ export default function ProjectsPage() {
             >
               <option value="Construction & Civil">🏗️ Building & Civil Construction</option>
               <option value="Infrastructure & Utilities">🛢️ Infrastructure, Pipeline & Utilities</option>
-              <option value="Software & IT">💻 Software Engineering & Cloud Platforms</option>
               <option value="Renewable Energy">⚡ Renewable Energy & Power Systems</option>
               <option value="Industrial Manufacturing">🏭 Industrial & Manufacturing</option>
               <option value="General Milestone Tracking">📋 General Project Tracking</option>

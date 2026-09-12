@@ -102,7 +102,7 @@ export default function OverviewPage({
             "Connect the Plan. Understand the Field. Verify the Evidence. Predict the Risk."
           </p>
           <p className="text-xs text-slate-500 mt-1">
-            Universal Progress Intelligence for Construction, IT, Energy & Infrastructure
+            Universal Progress Intelligence for Construction, Energy & Infrastructure
           </p>
         </div>
 
@@ -119,11 +119,10 @@ export default function OverviewPage({
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { id: 'infrastructure', name: 'Pipeline & Water Infra', domain: 'National Infra Corp', badge: '🛢️ Pipeline & Civil', color: 'border-blue-500/30 bg-blue-500/5' },
               { id: 'construction', name: 'Skyline Commercial Tower', domain: 'Apex Urban Developments', badge: '🏗️ Building & Civil', color: 'border-amber-500/30 bg-amber-500/5' },
-              { id: 'software', name: 'Enterprise Cloud Platform', domain: 'Synapse Digital Solutions', badge: '💻 Software & IT', color: 'border-indigo-500/30 bg-indigo-500/5' },
               { id: 'energy', name: 'SuryaKiran 50MW Solar Plant', domain: 'GreenGrid Clean Power', badge: '⚡ Renewable Energy', color: 'border-emerald-500/30 bg-emerald-500/5' },
             ].map(tpl => (
               <div
