@@ -11,11 +11,26 @@ logger = logging.getLogger(__name__)
 
 def extract_text_from_pdf(content: bytes) -> tuple[str, list[dict]]:
     """
-    Extract text from a PDF file.
+    Extract text from a PDF file using lightweight pypdf with fallback.
     Returns (full_text, pages) where pages is a list of {page_num, text}.
     """
+    # 1. Try pypdf (pure Python, ultra-lightweight)
     try:
-        import fitz  # PyMuPDF
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(content))
+        pages = []
+        full_text_parts = []
+        for i, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            pages.append({"page_num": i + 1, "text": text})
+            full_text_parts.append(text)
+        return "\n".join(full_text_parts), pages
+    except Exception as e:
+        logger.debug(f"pypdf fallback to fitz: {e}")
+
+    # 2. Try fitz (PyMuPDF) if installed
+    try:
+        import fitz
         doc = fitz.open(stream=content, filetype="pdf")
         pages = []
         full_text_parts = []

@@ -59,33 +59,58 @@ def encode_text(text: str) -> Optional[list[float]]:
         return None
 
 
+import math
+import re
+from collections import Counter
+
+
 def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
     """
     Calculate cosine similarity between two vectors.
     Returns a value between -1 and 1 (we normalize to 0-100%).
     """
-    a = np.array(vec_a, dtype=np.float32)
-    b = np.array(vec_b, dtype=np.float32)
-    dot = float(np.dot(a, b))
-    norm_a = float(np.linalg.norm(a))
-    norm_b = float(np.linalg.norm(b))
-    if norm_a == 0 or norm_b == 0:
+    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
         return 0.0
-    return dot / (norm_a * norm_b)
+    try:
+        dot = sum(x * y for x, y in zip(vec_a, vec_b))
+        norm_a = math.sqrt(sum(x * x for x in vec_a))
+        norm_b = math.sqrt(sum(y * y for y in vec_b))
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+    except Exception:
+        return 0.0
+
+
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r'\b\w+\b', text.lower())
 
 
 def tfidf_similarity(text_a: str, text_b: str) -> float:
     """
-    TF-IDF based similarity fallback when embeddings are unavailable.
-    Less accurate than embeddings but always works.
+    TF-IDF based similarity fallback when heavy embeddings are unavailable.
+    Pure-Python token frequency cosine similarity (ultra-fast, zero C++ dependencies).
     """
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity as sk_cosine
     try:
-        vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
-        matrix = vectorizer.fit_transform([text_a, text_b])
-        score = sk_cosine(matrix[0:1], matrix[1:2])[0][0]
-        return float(score)
+        tokens_a = _tokenize(text_a)
+        tokens_b = _tokenize(text_b)
+        if not tokens_a or not tokens_b:
+            return 0.0
+
+        counts_a = Counter(tokens_a)
+        counts_b = Counter(tokens_b)
+
+        all_words = set(counts_a.keys()).union(set(counts_b.keys()))
+        if not all_words:
+            return 0.0
+
+        dot = sum(counts_a.get(w, 0) * counts_b.get(w, 0) for w in all_words)
+        norm_a = math.sqrt(sum(v * v for v in counts_a.values()))
+        norm_b = math.sqrt(sum(v * v for v in counts_b.values()))
+
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return float(dot / (norm_a * norm_b))
     except Exception:
         # Absolute fallback: jaccard similarity on words
         words_a = set(text_a.lower().split())
