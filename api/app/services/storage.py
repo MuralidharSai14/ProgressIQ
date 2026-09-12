@@ -15,9 +15,16 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Base upload directory for local storage
-UPLOAD_DIR = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / settings.storage_local_dir
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# Base upload directory for local storage (uses /tmp on serverless)
+if os.environ.get("VERCEL") or "/var/task" in os.getcwd():
+    UPLOAD_DIR = Path("/tmp/uploads")
+else:
+    UPLOAD_DIR = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / settings.storage_local_dir
+
+try:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+except Exception as e:
+    logger.warning(f"Storage dir creation note: {e}")
 
 
 async def save_file(
