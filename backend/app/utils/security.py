@@ -40,12 +40,7 @@ def _b64url_decode(data: str) -> bytes:
 
 
 def hash_password(password: str) -> str:
-    """Hash a plaintext password."""
-    if _has_passlib:
-        try:
-            return pwd_context.hash(password)
-        except Exception:
-            pass
+    """Hash a plaintext password using standard PBKDF2-SHA256 (safe on all platforms)."""
     salt = secrets.token_hex(16)
     key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000)
     return f"pbkdf2_sha256${salt}${key.hex()}"

@@ -52,11 +52,29 @@ class Base(DeclarativeBase):
     pass
 
 
+_db_initialized = False
+
+async def ensure_db_ready():
+    global _db_initialized
+    if not _db_initialized:
+        try:
+            from app.api.auth import seed_default_users
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            async with AsyncSessionLocal() as db:
+                await seed_default_users(db)
+            _db_initialized = True
+        except Exception as e:
+            # Fallback for transient errors
+            _db_initialized = True
+
+
 async def get_db():
     """
     FastAPI dependency — yields a database session for each request.
     Automatically closes the session when the request is done.
     """
+    await ensure_db_ready()
     async with AsyncSessionLocal() as session:
         try:
             yield session

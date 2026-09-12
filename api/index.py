@@ -26,22 +26,9 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    try:
-        await create_all_tables()
-        async with AsyncSessionLocal() as db:
-            await seed_default_users(db)
-        logger.info("✅ Database tables and default users initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Startup note: {e}")
-    yield
-
-
 app = FastAPI(
     title="PROGRESSIQ API",
     version="2.0.0",
-    lifespan=lifespan,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
