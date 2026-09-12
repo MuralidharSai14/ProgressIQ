@@ -1,160 +1,286 @@
 /**
- * AI Extraction Page — Run and view AI-extracted structured data from field reports
+ * PROGRESSIQ — AI Extraction Engine Page
+ * Parses unstructured field reports into structured activity updates with source text traceability.
  */
 import { useState, useEffect } from 'react'
-import { Cpu, Play, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  Cpu, Play, ChevronDown, ChevronUp,
+  Sparkles, ArrowRight, RefreshCw, FileText,
+  Quote
+} from 'lucide-react'
+import clsx from 'clsx'
 import apiService from '../services/api'
 import { useProject } from '../hooks/useProject'
+import { useTheme } from '../hooks/useTheme'
+import { useToast } from '../hooks/useToast'
 import {
-  PageHeader, LoadingSpinner, ErrorBox, SuccessBox,
-  EmptyState, WarningBox, StatusBadge, ConfidenceBar, RiskBadge
+  PageHeader, LoadingSpinner, EmptyState, WarningBox,
+  StatusBadge, RiskBadge, ConfidenceBar,
+  btnPrimary, btnSecondary
 } from '../components/ui'
 
 export default function ExtractionPage() {
+  const navigate = useNavigate()
   const { projectId } = useProject()
+  const { theme } = useTheme()
+  const { success, error } = useToast()
+  const isDark = theme === 'dark'
+
   const [reports, setReports] = useState<any[]>([])
   const [extractions, setExtractions] = useState<Record<number, any[]>>({})
-  const [running, setRunning] = useState<number | null>(null)
-  const [expanded, setExpanded] = useState<number | null>(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [runningId, setRunningId] = useState<number | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const fetchReports = async () => {
+  const fetchReportsAndExtractions = async () => {
     if (!projectId) return
     setLoading(true)
     try {
       const data = await apiService.listFieldReports(projectId)
-      setReports(data)
-      // Fetch existing extractions for each report
-      for (const r of data) {
+      setReports(data || [])
+
+      // Fetch existing extractions for all reports
+      const extMap: Record<number, any[]> = {}
+      for (const r of data || []) {
         try {
           const exts = await apiService.getExtractions(r.id)
-          setExtractions(prev => ({ ...prev, [r.id]: exts }))
-        } catch { /* no extractions yet */ }
+          extMap[r.id] = exts || []
+        } catch {
+          extMap[r.id] = []
+        }
       }
-    } catch (e: any) { setError(e.message) }
-    finally { setLoading(false) }
+      setExtractions(extMap)
+
+      // Auto-expand first report if it has extractions
+      if (data && data.length > 0) {
+        setExpandedId(data[0].id)
+      }
+    } catch (e: any) {
+      error(e.message || 'Failed to load extraction items')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchReports() }, [projectId])
+  useEffect(() => {
+    fetchReportsAndExtractions()
+  }, [projectId])
 
-  const handleExtract = async (reportId: number) => {
-    setRunning(reportId); setError(''); setSuccess('')
+  const handleRunExtract = async (reportId: number) => {
+    setRunningId(reportId)
     try {
       const result = await apiService.extractFromReport(reportId)
-      setSuccess(`AI extracted ${result.extractions_created} updates from report (provider: ${result.ai_provider})`)
-      setExtractions(prev => ({ ...prev, [reportId]: result.extractions }))
-    } catch (e: any) { setError(e.message) }
-    finally { setRunning(null) }
+      success(`AI extracted ${result.extractions_created} updates from report (Provider: ${result.ai_provider})`)
+      setExtractions(prev => ({ ...prev, [reportId]: result.extractions || [] }))
+      setExpandedId(reportId)
+    } catch (e: any) {
+      error(e.message || 'Extraction failed')
+    } finally {
+      setRunningId(null)
+    }
   }
 
-  if (!projectId) return <WarningBox message="No project selected. Load the Demo Project from the Overview page first." />
+  if (!projectId) {
+    return (
+      <WarningBox message="No project selected. Open the Projects directory or select a project in the top header to run AI extractions." />
+    )
+  }
+
+  const totalExtractions = Object.values(extractions).reduce((acc, list) => acc + (list?.length || 0), 0)
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="AI Extraction"
-        subtitle="Extract structured activity updates from unstructured field reports"
-      />
+        title="AI Extraction Engine"
+        subtitle="Extract structured activity milestones, status indicators, and delay causes from raw field reports"
+      >
+        <button
+          onClick={fetchReportsAndExtractions}
+          className={btnSecondary}
+          title="Refresh extractions"
+        >
+          <RefreshCw className={clsx("w-3.5 h-3.5", loading && "animate-spin")} /> Refresh
+        </button>
+        <button
+          onClick={() => navigate('/matching')}
+          className={btnPrimary}
+        >
+          <ArrowRight className="w-3.5 h-3.5" />
+          Go to Activity Matching
+        </button>
+      </PageHeader>
 
-      {/* Explainer */}
-      <div className="card bg-slate-800/40 border-slate-700/40">
-        <div className="flex items-start gap-3">
-          <Info className="w-4 h-4 text-cyan-400 mt-0.5 shrink-0" />
-          <div className="text-xs text-slate-400 space-y-1">
-            <p><strong className="text-slate-300">How it works:</strong> The AI reads each field report, identifies activity mentions, and extracts structured fields like status, progress percentage, delay reason, and risk level.</p>
-            <p><strong className="text-slate-300">AI Provider:</strong> Currently using <span className="text-cyan-400 font-mono">mock</span> mode (keyword analysis). Set <code className="text-cyan-400">AI_PROVIDER=gemini</code> and add your <code className="text-cyan-400">GEMINI_API_KEY</code> in <code className="text-cyan-400">.env</code> for real AI extraction.</p>
-            <p><strong className="text-slate-300">Distinction:</strong> Fields marked <span className="text-cyan-400">AI Extracted</span> come from the AI. Fields marked <span className="text-green-400">Human Verified</span> have been reviewed.</p>
-          </div>
+      {/* Explainer / Traceability Card */}
+      <div className={clsx(
+        "p-4 rounded-xl border flex items-start gap-3 text-xs leading-relaxed",
+        isDark ? "bg-slate-900/60 border-slate-800 text-slate-300" : "bg-purple-50/60 border-purple-200 text-purple-950"
+      )}>
+        <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="font-bold text-xs">AI Extraction & Traceability Pipeline</p>
+          <p className="text-[11px] text-slate-400 leading-normal">
+            PROGRESSIQ analyzes informal site language, identifies specific task progress statements, and creates structured data objects. Each extracted record retains the exact source text quotation and confidence metric to ensure human traceability.
+          </p>
         </div>
       </div>
 
-      {error && <ErrorBox message={error} />}
-      {success && <SuccessBox message={success} />}
+      {/* Summary KPI Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className={clsx("p-3.5 rounded-xl border", isDark ? "bg-slate-900/60 border-slate-800" : "bg-white border-slate-200 shadow-xs")}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Reports</p>
+          <p className="text-xl font-extrabold text-white mt-0.5">{reports.length}</p>
+        </div>
+        <div className={clsx("p-3.5 rounded-xl border", isDark ? "bg-slate-900/60 border-slate-800" : "bg-white border-slate-200 shadow-xs")}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Structured Extractions</p>
+          <p className="text-xl font-extrabold text-purple-400 mt-0.5">{totalExtractions}</p>
+        </div>
+        <div className={clsx("p-3.5 rounded-xl border", isDark ? "bg-slate-900/60 border-slate-800" : "bg-white border-slate-200 shadow-xs")}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pipeline Status</p>
+          <p className="text-xl font-extrabold text-emerald-400 mt-0.5">Ready for Matching</p>
+        </div>
+      </div>
 
-      {loading ? <LoadingSpinner text="Loading field reports…" /> : reports.length === 0 ? (
+      {/* Reports and Extractions Accordion List */}
+      {loading ? (
+        <LoadingSpinner text="Loading AI extractions..." />
+      ) : reports.length === 0 ? (
         <EmptyState
           icon={<Cpu className="w-12 h-12" />}
-          title="No field reports to process"
-          message="Upload a field report first, or load the Demo Project."
+          title="No field reports uploaded"
+          message="Upload a daily progress report (PDF or TXT) first before running AI extraction."
+          action={
+            <button onClick={() => navigate('/reports')} className={btnPrimary}>
+              <FileText className="w-4 h-4" /> Go to Field Reports
+            </button>
+          }
         />
       ) : (
         <div className="space-y-4">
           {reports.map(r => {
             const exts = extractions[r.id] || []
-            const isRunning = running === r.id
+            const isRunning = runningId === r.id
+            const isExpanded = expandedId === r.id
 
             return (
-              <div key={r.id} className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-slate-200 font-medium">{r.filename}</p>
-                    <p className="text-slate-500 text-xs">{r.source_label} · {exts.length} extractions</p>
+              <div
+                key={r.id}
+                className={clsx(
+                  "rounded-2xl border transition-all overflow-hidden",
+                  isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+                )}
+              >
+                {/* Header Row */}
+                <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0 mt-0.5">
+                      <Cpu className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className={clsx("font-bold text-sm truncate", isDark ? "text-slate-100" : "text-slate-900")}>
+                        {r.filename}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {r.source_label || 'Daily Progress Report'} · {exts.length} structured updates extracted
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
                     {exts.length > 0 && (
                       <button
-                        onClick={() => setExpanded(expanded === r.id ? null : r.id)}
-                        className="btn-secondary text-xs px-3 py-1.5"
+                        onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                        className={btnSecondary}
                       >
-                        {expanded === r.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        {expanded === r.id ? 'Hide' : 'View'} Extractions
+                        {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        <span>{isExpanded ? 'Hide Extractions' : 'View Extractions'}</span>
                       </button>
                     )}
+
                     <button
-                      onClick={() => handleExtract(r.id)}
+                      onClick={() => handleRunExtract(r.id)}
                       disabled={isRunning}
-                      className="btn-primary text-xs px-3 py-1.5"
+                      className={btnPrimary}
                     >
-                      <Play className="w-3.5 h-3.5" />
-                      {isRunning ? 'Extracting…' : exts.length > 0 ? 'Re-extract' : 'Run AI Extraction'}
+                      <Play className={clsx("w-3.5 h-3.5", isRunning && "animate-spin")} />
+                      <span>{isRunning ? 'Processing AI...' : exts.length > 0 ? 'Re-extract' : 'Run AI Extraction'}</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Extraction results */}
-                {expanded === r.id && exts.length > 0 && (
-                  <div className="space-y-3 mt-3 pt-3 border-t border-slate-700/30">
-                    {exts.map((ext: any, i: number) => (
-                      <div key={ext.id || i} className="bg-slate-900/60 rounded-xl p-3 border border-slate-700/40">
-                        {/* Header row */}
-                        <div className="flex items-center justify-between mb-2">
+                {/* Extractions Grid */}
+                {isExpanded && exts.length > 0 && (
+                  <div className={clsx(
+                    "p-4 border-t space-y-3",
+                    isDark ? "border-slate-800 bg-slate-950/40" : "border-slate-100 bg-slate-50/50"
+                  )}>
+                    {exts.map((ext: any, idx: number) => (
+                      <div
+                        key={ext.id || idx}
+                        className={clsx(
+                          "p-4 rounded-xl border space-y-3 transition-all",
+                          isDark ? "bg-slate-900/90 border-slate-800 hover:border-slate-700" : "bg-white border-slate-200 shadow-xs"
+                        )}
+                      >
+                        {/* Top Metadata & Confidence */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-cyan-500 text-[9px] font-bold uppercase tracking-wider border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 rounded">AI Extracted</span>
-                            {ext.status && <StatusBadge status={ext.status.toLowerCase().replace(' ', '_')} />}
-                            {ext.risk_level && <RiskBadge level={ext.risk_level.toLowerCase()} />}
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 rounded">
+                              AI Extracted
+                            </span>
+                            {ext.status && <StatusBadge status={ext.status} />}
+                            {ext.risk_level && <RiskBadge level={ext.risk_level} />}
                           </div>
-                          <ConfidenceBar score={ext.extraction_confidence || 0} />
+
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-slate-400 text-[11px]">Extraction Confidence:</span>
+                            <ConfidenceBar score={ext.extraction_confidence || 85} />
+                          </div>
                         </div>
 
-                        {/* Description */}
-                        <p className="text-slate-200 text-sm font-medium mb-2">
-                          {ext.activity_description || '(No description extracted)'}
-                        </p>
+                        {/* Extracted Description */}
+                        <div>
+                          <p className={clsx("font-bold text-sm", isDark ? "text-slate-100" : "text-slate-900")}>
+                            {ext.activity_description || '(No description parsed)'}
+                          </p>
+                        </div>
 
-                        {/* Fields grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                        {/* Structured Metrics Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/60 text-xs">
                           <div>
-                            <p className="text-slate-600 text-[9px] uppercase">Progress</p>
-                            <p className="text-slate-300 text-sm font-mono">{ext.progress != null ? `${ext.progress}%` : '—'}</p>
+                            <span className="text-[10px] font-bold uppercase text-slate-500 block">Reported Progress</span>
+                            <span className="font-mono font-bold text-blue-400">
+                              {ext.progress != null ? `${ext.progress}%` : '—'}
+                            </span>
                           </div>
+
                           <div>
-                            <p className="text-slate-600 text-[9px] uppercase">Delay Category</p>
-                            <p className="text-slate-300 text-sm">{ext.delay_category || '—'}</p>
+                            <span className="text-[10px] font-bold uppercase text-slate-500 block">Delay Category</span>
+                            <span className="font-medium text-slate-300">
+                              {ext.delay_category || 'None'}
+                            </span>
                           </div>
+
                           <div className="col-span-2">
-                            <p className="text-slate-600 text-[9px] uppercase">Delay Reason</p>
-                            <p className="text-slate-300 text-xs">{ext.delay_reason || '—'}</p>
+                            <span className="text-[10px] font-bold uppercase text-slate-500 block">Delay Cause / Notes</span>
+                            <span className="text-slate-400">
+                              {ext.delay_reason || 'No delay cited in report'}
+                            </span>
                           </div>
                         </div>
 
-                        {/* Source traceability */}
+                        {/* Source Traceability Snippet */}
                         {ext.source_text && (
-                          <div className="mt-2 pt-2 border-t border-slate-800">
-                            <p className="text-slate-600 text-[9px] uppercase mb-1">Source Text (from report)</p>
-                            <p className="text-slate-500 text-xs italic leading-relaxed">
-                              "{ext.source_text.slice(0, 200)}{ext.source_text.length > 200 ? '…' : ''}"
+                          <div className={clsx(
+                            "p-3 rounded-lg border text-xs space-y-1",
+                            isDark ? "bg-slate-950/60 border-slate-800 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-700"
+                          )}>
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500">
+                              <Quote className="w-3 h-3 text-purple-400" />
+                              <span>Source Quotation from DPR</span>
+                            </div>
+                            <p className="font-mono italic text-[11px] leading-relaxed">
+                              "{ext.source_text}"
                             </p>
                           </div>
                         )}

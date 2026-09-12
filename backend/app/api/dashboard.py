@@ -1,4 +1,4 @@
-"""Dashboard summary and risk endpoints."""
+﻿"""Dashboard summary and risk endpoints."""
 from collections import Counter
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from app.database.connection import get_db
 from app.models.models import (
     Project, ScheduleActivity, FieldReport, ExtractedUpdate,
-    ActivityMatch, Risk
+    ActivityMatch, Risk, ActivityAssessment, VerificationTask, Conflict
 )
 from app.services.risk_engine import classify_health, detect_risks
 from app.ai.provider import get_ai_provider
@@ -36,7 +36,7 @@ async def get_dashboard(project_id: int, db: AsyncSession = Depends(get_db)):
     if not activities:
         return _empty_dashboard(project)
 
-    # ── Progress Calculations ─────────────────────────────────────────────────
+    # â”€â”€ Progress Calculations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     total = len(activities)
     planned_avg = sum(a.planned_progress for a in activities) / total
     actual_avg = sum(a.actual_progress for a in activities) / total
@@ -107,6 +107,36 @@ async def get_dashboard(project_id: int, db: AsyncSession = Depends(get_db)):
             pending_reviews = sum(1 for m in matches if m.status == "needs_review")
             if matches:
                 avg_confidence = sum(m.confidence_score for m in matches) / len(matches)
+
+    # ── Evidence-backed intelligence stats ─────────────────────────────────────────
+    assess_result = await db.execute(
+        select(ActivityAssessment).where(
+            ActivityAssessment.activity_id.in_([a.id for a in activities])
+        )
+    )
+    assessments = assess_result.scalars().all()
+
+    if assessments:
+        ev_sup_values = [a.evidence_supported_progress for a in assessments if a.evidence_supported_progress is not None]
+        evidence_supported_avg = sum(ev_sup_values) / len(ev_sup_values) if ev_sup_values else actual_avg * 0.85
+        high_conf = sum(1 for a in assessments if a.confidence_label == "high")
+        med_conf = sum(1 for a in assessments if a.confidence_label == "medium")
+        low_conf = sum(1 for a in assessments if a.confidence_label == "low")
+    else:
+        evidence_supported_avg = round(actual_avg * 0.85, 1)
+        high_conf = med_conf = low_conf = 0
+
+    vt_result = await db.execute(
+        select(func.count()).select_from(VerificationTask)
+        .where(VerificationTask.project_id == project_id, VerificationTask.status == "pending")
+    )
+    verification_count = vt_result.scalar() or 0
+
+    cf_result = await db.execute(
+        select(func.count()).select_from(Conflict)
+        .where(Conflict.project_id == project_id, Conflict.is_resolved == False)
+    )
+    conflict_count = cf_result.scalar() or 0
 
     # Overall health
     health = classify_health(variance, delayed, len(critical_risks))
@@ -203,6 +233,14 @@ async def get_dashboard(project_id: int, db: AsyncSession = Depends(get_db)):
         "pending_reviews": pending_reviews,
         "ai_match_confidence_avg": round(avg_confidence, 1),
 
+        # Evidence-backed progress stats
+        "evidence_supported_progress": round(evidence_supported_avg, 1),
+        "verification_queue_count": verification_count,
+        "conflict_count": conflict_count,
+        "high_confidence_count": high_conf,
+        "medium_confidence_count": med_conf,
+        "low_confidence_count": low_conf,
+
         # Recommendations
         "recommendations": recommendations,
     }
@@ -273,3 +311,6 @@ def _empty_dashboard(project):
         "total_activities": 0,
         "message": "No schedule data. Upload a schedule or load the demo project.",
     }
+
+
+

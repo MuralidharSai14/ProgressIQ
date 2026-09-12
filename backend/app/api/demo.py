@@ -7,14 +7,21 @@ from app.services.demo_loader import load_demo_project
 router = APIRouter()
 
 
+@router.get("/demo/templates")
+async def get_demo_templates():
+    """Return available industry templates."""
+    from app.services.demo_loader import TEMPLATES_CATALOG
+    return TEMPLATES_CATALOG
+
+
 @router.post("/demo/load")
-async def load_demo(db: AsyncSession = Depends(get_db)):
+async def load_demo(template: str = "infrastructure", db: AsyncSession = Depends(get_db)):
     """
-    Load the complete demo project into the database.
-    This powers the 'Load Demo Project' button in the UI.
+    Load an industry template demo project into the database.
+    Supported templates: infrastructure | construction | software | energy
     """
     try:
-        result = await load_demo_project(db)
+        result = await load_demo_project(db, template_type=template)
         return {"success": True, **result}
     except Exception as e:
         import logging

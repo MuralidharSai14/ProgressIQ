@@ -1,13 +1,14 @@
 """
 PROGRESSIQ — Schedule Processor
-Parses Excel/CSV files into ScheduleActivity objects.
-Handles flexible column naming (different organizations use different headers).
+Parses Excel (.xlsx, .xls), CSV, and JSON files into normalized ScheduleActivity dictionaries.
+Provides comprehensive row-by-row validation and detailed import diagnostics without silently discarding rows.
 """
 import pandas as pd
+import json
 import io
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ COLUMN_ALIASES = {
 def _resolve_column(df: pd.DataFrame, canonical: str) -> Optional[str]:
     """Find which column in the dataframe matches a canonical name."""
     aliases = COLUMN_ALIASES.get(canonical, [canonical])
-    df_lower = {c.lower().strip(): c for c in df.columns}
+    df_lower = {str(c).lower().strip(): c for c in df.columns}
     for alias in aliases:
         if alias.lower() in df_lower:
             return df_lower[alias.lower()]
@@ -45,8 +46,7 @@ def _parse_date(val) -> Optional[datetime]:
         return val
     if isinstance(val, pd.Timestamp):
         return val.to_pydatetime()
-    # Try common date formats
-    for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%b-%Y", "%d %b %Y"):
+    for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%b-%Y", "%d %b %Y", "%Y/%m/%d"):
         try:
             return datetime.strptime(str(val).strip(), fmt)
         except ValueError:
@@ -62,8 +62,10 @@ def _parse_progress(val) -> float:
         v = float(str(val).replace("%", "").strip())
         if v > 1.0 and v <= 100.0:
             return round(v, 2)
-        elif v <= 1.0:
+        elif v <= 1.0 and v >= 0.0:
             return round(v * 100, 2)  # 0.55 → 55%
+        elif v > 100.0:
+            return 100.0
         return 0.0
     except (ValueError, TypeError):
         return 0.0
@@ -76,37 +78,128 @@ def _parse_bool(val) -> bool:
     return str(val).lower().strip() in ("yes", "true", "1", "y", "milestone", "m")
 
 
-def parse_schedule_file(content: bytes, filename: str) -> list[dict]:
+def parse_schedule_file(content: bytes, filename: str) -> tuple[list[dict], list[dict], int]:
     """
-    Parse an Excel or CSV schedule file.
-    Returns a list of activity dicts ready for database insertion.
-
-    Args:
-        content: Raw file bytes
-        filename: Original filename (used to detect file type)
+    Parse an Excel, CSV, or JSON schedule file.
+    
+    Returns:
+        tuple of (valid_activities: list[dict], errors: list[dict], total_rows: int)
     """
     filename_lower = filename.lower()
+    errors = []
+    activities = []
+    total_rows = 0
+
+    # 1. Handle Primavera P6 .XER format
+    if filename_lower.endswith(".xer"):
+        from app.processors.p6_parser import parse_p6_xer
+        p6_acts, p6_errs = parse_p6_xer(content)
+        total_rows = len(p6_acts) + len(p6_errs)
+        for act in p6_acts:
+            activities.append({
+                "activity_id": act["activity_id"],
+                "activity_name": act["name"],
+                "level": act.get("level", 2),
+                "parent_id": None,
+                "planned_start": _parse_date(act.get("planned_start")),
+                "planned_finish": _parse_date(act.get("planned_finish")),
+                "planned_progress": act.get("planned_progress", 0.0),
+                "actual_progress": act.get("actual_progress", 0.0),
+                "progress_variance": round(act.get("actual_progress", 0.0) - act.get("planned_progress", 0.0), 2),
+                "dependency": None,
+                "is_milestone": False,
+                "status": act.get("status", "not_started"),
+            })
+        for idx, err in enumerate(p6_errs, start=1):
+            errors.append({"row": idx, "reason": err})
+        return activities, errors, total_rows
+
+    # 2. Handle Primavera P6 XML format
+    if filename_lower.endswith(".xml"):
+        from app.processors.p6_parser import parse_p6_xml
+        p6_acts, p6_errs = parse_p6_xml(content)
+        total_rows = len(p6_acts) + len(p6_errs)
+        for act in p6_acts:
+            activities.append({
+                "activity_id": act["activity_id"],
+                "activity_name": act["name"],
+                "level": act.get("level", 2),
+                "parent_id": None,
+                "planned_start": _parse_date(act.get("planned_start")),
+                "planned_finish": _parse_date(act.get("planned_finish")),
+                "planned_progress": act.get("planned_progress", 0.0),
+                "actual_progress": act.get("actual_progress", 0.0),
+                "progress_variance": round(act.get("actual_progress", 0.0) - act.get("planned_progress", 0.0), 2),
+                "dependency": None,
+                "is_milestone": False,
+                "status": act.get("status", "not_started"),
+            })
+        for idx, err in enumerate(p6_errs, start=1):
+            errors.append({"row": idx, "reason": err})
+        return activities, errors, total_rows
+
+    # 3. Handle JSON format
+    if filename_lower.endswith(".json"):
+        try:
+            raw_data = json.loads(content.decode("utf-8"))
+            if isinstance(raw_data, dict):
+                items = raw_data.get("activities") or raw_data.get("tasks") or raw_data.get("data") or [raw_data]
+            elif isinstance(raw_data, list):
+                items = raw_data
+            else:
+                raise ValueError("JSON must be an array of activities or contain an 'activities' array.")
+            
+            total_rows = len(items)
+            for idx, item in enumerate(items, start=1):
+                name = item.get("activity_name") or item.get("name") or item.get("task")
+                if not name or not str(name).strip():
+                    errors.append({"row": idx, "reason": "Missing activity name"})
+                    continue
+                
+                act_id = item.get("activity_id") or item.get("id") or f"ACT-{idx:04d}"
+                plan_p = _parse_progress(item.get("planned_progress", 0))
+                act_p = _parse_progress(item.get("actual_progress", 0))
+                
+                activities.append({
+                    "activity_id": str(act_id).strip(),
+                    "activity_name": str(name).strip(),
+                    "level": int(item.get("level", 5)),
+                    "parent_id": str(item.get("parent_id", "")).strip() or None,
+                    "planned_start": _parse_date(item.get("planned_start")),
+                    "planned_finish": _parse_date(item.get("planned_finish")),
+                    "planned_progress": plan_p,
+                    "actual_progress": act_p,
+                    "progress_variance": round(act_p - plan_p, 2),
+                    "dependency": str(item.get("dependency", "")).strip() or None,
+                    "is_milestone": bool(item.get("is_milestone", False)),
+                    "status": item.get("status", "not_started"),
+                })
+            return activities, errors, total_rows
+        except Exception as e:
+            raise ValueError(f"JSON parsing error: {e}")
+
+    # 4. Handle CSV / Excel
     try:
         if filename_lower.endswith(".csv"):
             df = pd.read_csv(io.BytesIO(content))
         elif filename_lower.endswith((".xlsx", ".xls")):
             df = pd.read_excel(io.BytesIO(content), engine="openpyxl")
         else:
-            raise ValueError(f"Unsupported file type: {filename}")
+            raise ValueError(f"Unsupported file format: {filename}. Please upload .xer, .xml, .xlsx, .xls, .csv, or .json")
     except Exception as e:
-        raise ValueError(f"Could not parse file '{filename}': {e}")
+        raise ValueError(f"Could not read schedule file '{filename}': {e}")
 
     if df.empty:
-        raise ValueError("The uploaded schedule file is empty.")
+        raise ValueError("The uploaded schedule file contains no rows.")
 
-    # Strip whitespace from column names
     df.columns = [str(c).strip() for c in df.columns]
-
-    # Resolve column mappings
     col = {key: _resolve_column(df, key) for key in COLUMN_ALIASES}
+    
+    if not col.get("activity_name"):
+        raise ValueError("Could not find an 'Activity Name' / 'Task Description' column. Please check headers.")
 
-    activities = []
-    for _, row in df.iterrows():
+    total_rows = len(df)
+    for idx, (_, row) in enumerate(df.iterrows(), start=2):  # start=2 considering header is row 1
         def get(canonical, default=None):
             c = col.get(canonical)
             if c is None:
@@ -116,9 +209,11 @@ def parse_schedule_file(content: bytes, filename: str) -> list[dict]:
                 return default
             return val
 
-        activity_name = str(get("activity_name", "")).strip()
+        activity_name_raw = get("activity_name", "")
+        activity_name = str(activity_name_raw).strip() if activity_name_raw is not None else ""
         if not activity_name or activity_name.lower() in ("nan", "none", ""):
-            continue  # Skip blank rows
+            errors.append({"row": idx, "reason": "Empty activity name or blank line"})
+            continue
 
         activity_id_raw = get("activity_id")
         activity_id = str(activity_id_raw).strip() if activity_id_raw else f"ACT-{len(activities)+1:04d}"
@@ -127,7 +222,7 @@ def parse_schedule_file(content: bytes, filename: str) -> list[dict]:
         actual_prog = _parse_progress(get("actual_progress", 0))
         variance = round(actual_prog - planned_prog, 2)
 
-        # Auto-classify status if not provided
+        # Status classification
         status_raw = str(get("status", "")).strip().lower()
         if status_raw in ("", "nan", "none"):
             if actual_prog >= 100:
@@ -149,7 +244,6 @@ def parse_schedule_file(content: bytes, filename: str) -> list[dict]:
             }
             status = STATUS_MAP.get(status_raw, "not_started")
 
-        # Level
         level_raw = get("level")
         try:
             level = int(float(str(level_raw))) if level_raw is not None else 5
@@ -172,8 +266,5 @@ def parse_schedule_file(content: bytes, filename: str) -> list[dict]:
         }
         activities.append(act)
 
-    if not activities:
-        raise ValueError("No valid activities found in the uploaded file. Check column headers.")
-
-    logger.info(f"Parsed {len(activities)} activities from '{filename}'")
-    return activities
+    logger.info(f"Schedule parse complete for '{filename}': {len(activities)} valid activities, {len(errors)} errors")
+    return activities, errors, total_rows

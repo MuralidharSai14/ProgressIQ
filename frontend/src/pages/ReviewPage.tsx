@@ -1,182 +1,262 @@
 /**
- * Review Queue Page — Human validation of low-confidence AI matches
+ * PROGRESSIQ — Match Review Queue Page
+ * Human validation for AI semantic matches where confidence falls below the strict 75% threshold.
  */
 import { useState, useEffect } from 'react'
-import { ClipboardCheck, Check, X, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  ClipboardCheck, Check, X, RefreshCw, AlertTriangle
+} from 'lucide-react'
+import clsx from 'clsx'
 import apiService from '../services/api'
 import { useProject } from '../hooks/useProject'
+import { useTheme } from '../hooks/useTheme'
+import { useToast } from '../hooks/useToast'
 import {
-  PageHeader, LoadingSpinner, ErrorBox, SuccessBox,
-  EmptyState, WarningBox, ConfidenceBar, StatusBadge
+  PageHeader, LoadingSpinner, EmptyState, WarningBox,
+  ConfidenceBar, StatusBadge,
+  btnPrimary, btnSecondary, btnSuccess, btnDanger, inputField
 } from '../components/ui'
 
 export default function ReviewPage() {
+  const navigate = useNavigate()
   const { projectId } = useProject()
+  const { theme } = useTheme()
+  const { success, error } = useToast()
+  const isDark = theme === 'dark'
+
   const [matches, setMatches] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const [reviewing, setReviewing] = useState<number | null>(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [reviewingId, setReviewingId] = useState<number | null>(null)
   const [notes, setNotes] = useState<Record<number, string>>({})
 
-  const fetchPending = async () => {
+  const fetchPendingMatches = async () => {
     if (!projectId) return
     setLoading(true)
     try {
       const data = await apiService.getMatches(projectId, 'needs_review')
       setMatches(data.matches || [])
-    } catch (e: any) { setError(e.message) }
-    finally { setLoading(false) }
+    } catch (e: any) {
+      error(e.message || 'Failed to load review queue')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchPending() }, [projectId])
+  useEffect(() => {
+    fetchPendingMatches()
+  }, [projectId])
 
   const handleDecision = async (matchId: number, decision: 'approved' | 'rejected') => {
-    setReviewing(matchId); setError(''); setSuccess('')
+    setReviewingId(matchId)
     try {
       await apiService.reviewMatch(matchId, {
         decision,
         notes: notes[matchId] || '',
       })
-      setSuccess(`Match ${decision}. `)
+      success(`Match ${decision} successfully.`)
       setMatches(prev => prev.filter(m => m.id !== matchId))
-    } catch (e: any) { setError(e.message) }
-    finally { setReviewing(null) }
+    } catch (e: any) {
+      error(e.message || 'Decision failed')
+    } finally {
+      setReviewingId(null)
+    }
   }
 
-  if (!projectId) return <WarningBox message="No project selected. Load the Demo Project from the Overview page first." />
+  if (!projectId) {
+    return (
+      <WarningBox message="No project selected. Open the Projects directory or select a project in the top header to inspect the match review queue." />
+    )
+  }
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Review Queue"
-        subtitle="Human validation for AI matches with confidence below threshold"
+        title="Match Review Queue"
+        subtitle="Validate ambiguous AI semantic schedule matches before they link to the official project baseline"
       >
-        <button onClick={fetchPending} className="btn-secondary text-xs px-3 py-1.5">
-          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        <button
+          onClick={fetchPendingMatches}
+          className={btnSecondary}
+          title="Refresh pending matches"
+        >
+          <RefreshCw className={clsx("w-3.5 h-3.5", loading && "animate-spin")} /> Refresh
         </button>
       </PageHeader>
 
-      {/* Explainer */}
-      <div className="card bg-amber-500/5 border-amber-500/20">
-        <p className="text-amber-200 text-xs leading-relaxed">
-          <strong>Why human review matters:</strong> When the AI confidence score is below{' '}
-          <strong>75%</strong>, the system does not silently trust the match.
-          These items are flagged here for your review. You can approve, reject, or reassign.
-          This is essential for maintaining data quality and AI accountability.
-        </p>
+      {/* Explainer Banner */}
+      <div className={clsx(
+        "p-4 rounded-xl border flex items-start gap-3 text-xs leading-relaxed",
+        isDark ? "bg-slate-900/60 border-slate-800 text-slate-300" : "bg-amber-50/60 border-amber-200 text-amber-950"
+      )}>
+        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="font-bold text-xs">Low-Confidence AI Match Queue (&lt;75%)</p>
+          <p className="text-[11px] text-slate-400 leading-normal">
+            When semantic cosine similarity is below 75%, PROGRESSIQ never auto-assigns the field update to the schedule activity. Review each candidate below and confirm or reject the match.
+          </p>
+        </div>
       </div>
 
-      {error && <ErrorBox message={error} />}
-      {success && <SuccessBox message={success} />}
-
-      {loading ? <LoadingSpinner text="Loading review queue…" /> : matches.length === 0 ? (
+      {/* Matches List */}
+      {loading ? (
+        <LoadingSpinner text="Loading pending match reviews..." />
+      ) : matches.length === 0 ? (
         <EmptyState
-          icon={<ClipboardCheck className="w-12 h-12" />}
-          title="Review Queue is empty"
-          message="All AI matches are either auto-approved (confidence ≥75%) or already reviewed. Load the Demo Project to see items in the queue."
+          icon={<ClipboardCheck className="w-12 h-12 text-emerald-400" />}
+          title="Match Review Queue is empty"
+          message="All semantic AI matches have confidence scores above 75% or have already been reviewed by planning engineers."
+          action={
+            <button onClick={() => navigate('/matching')} className={btnPrimary}>
+              Go to Activity Matching
+            </button>
+          }
         />
       ) : (
         <div className="space-y-4">
-          <p className="text-slate-400 text-sm">{matches.length} item(s) awaiting review</p>
-          {matches.map(m => (
-            <div key={m.id} className="card border border-yellow-500/30 bg-yellow-500/5">
-              {/* Match details */}
-              <div className="flex items-start justify-between mb-3">
-                <StatusBadge status={m.status} />
-                <ConfidenceBar score={m.confidence_score} />
-              </div>
+          <p className="text-xs font-bold text-amber-400">
+            {matches.length} semantic match item(s) awaiting planning engineer approval
+          </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                {/* Field update */}
-                <div className="bg-slate-900/60 rounded-lg p-3">
-                  <p className="text-[9px] text-cyan-400 font-bold uppercase mb-2">Field Update (AI Extracted)</p>
-                  <p className="text-slate-200 text-sm font-medium mb-2">
-                    {m.extracted_update?.activity_description}
-                  </p>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Status</span>
-                      <span className="text-slate-300">{m.extracted_update?.status}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Progress</span>
-                      <span className="text-slate-300">{m.extracted_update?.progress}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Delay</span>
-                      <span className="text-slate-300">{m.extracted_update?.delay_category || '—'}</span>
-                    </div>
+          {matches.map(m => {
+            const isReviewing = reviewingId === m.id
+
+            return (
+              <div
+                key={m.id}
+                className={clsx(
+                  "p-5 rounded-2xl border transition-all space-y-4",
+                  isDark ? "bg-slate-900/90 border-amber-500/40 shadow-xs" : "bg-white border-amber-400 shadow-xs"
+                )}
+              >
+                {/* Top Status & Confidence */}
+                <div className="flex items-center justify-between gap-2 border-b pb-3 border-slate-800/60">
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={m.status} />
+                    <span className="text-xs text-slate-400 font-semibold">
+                      Match ID #{m.id}
+                    </span>
                   </div>
-                  {m.extracted_update?.source_text && (
-                    <p className="text-slate-600 text-[10px] mt-2 italic">
-                      Source: "{m.extracted_update.source_text.slice(0, 120)}…"
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">AI Vector Confidence:</span>
+                    <ConfidenceBar score={m.confidence_score} />
+                  </div>
+                </div>
+
+                {/* Side-by-Side Comparison */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left: Source Field DPR Update */}
+                  <div className={clsx(
+                    "p-4 rounded-xl border space-y-2.5",
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-blue-50/50 border-blue-200"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-blue-400 bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 rounded">
+                        Extracted Field Update
+                      </span>
+                    </div>
+
+                    <p className={clsx("font-bold text-sm", isDark ? "text-slate-100" : "text-slate-900")}>
+                      {m.extracted_update?.activity_description || '(No description)'}
                     </p>
-                  )}
-                </div>
 
-                {/* AI proposed match */}
-                <div className="bg-slate-900/60 rounded-lg p-3">
-                  <p className="text-[9px] text-purple-400 font-bold uppercase mb-2">AI Proposed Schedule Match</p>
-                  <p className="text-slate-300 text-sm font-medium mb-1">
-                    {m.matched_activity?.activity_name}
-                  </p>
-                  <p className="text-slate-500 text-xs font-mono">{m.matched_activity?.activity_id} · Level {m.matched_activity?.level}</p>
-                  <div className="mt-2 text-xs space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Planned</span>
-                      <span className="text-slate-300">{m.matched_activity?.planned_progress}%</span>
+                    <div className="space-y-1 text-xs text-slate-400 pt-2 border-t border-slate-800/60">
+                      <div className="flex justify-between">
+                        <span>Reported Status:</span>
+                        <span className="font-semibold text-slate-200">{m.extracted_update?.status || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Reported Progress:</span>
+                        <span className="font-mono font-bold text-blue-400">{m.extracted_update?.progress}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Delay Category:</span>
+                        <span className="text-slate-200">{m.extracted_update?.delay_category || 'None'}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Actual</span>
-                      <span className="text-slate-300">{m.matched_activity?.actual_progress}%</span>
-                    </div>
+
+                    {m.extracted_update?.source_text && (
+                      <p className="text-[11px] font-mono italic text-slate-400 pt-2 border-t border-slate-800/60">
+                        "{m.extracted_update.source_text.slice(0, 160)}…"
+                      </p>
+                    )}
                   </div>
 
-                  {m.alternative_matches?.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-slate-800">
-                      <p className="text-[9px] text-slate-600 mb-1">Alternatives considered:</p>
-                      {m.alternative_matches.map((alt: any, i: number) => (
-                        <p key={i} className="text-slate-600 text-[10px]">
-                          {alt.activity_id} — {alt.activity_name?.slice(0, 35)} ({alt.confidence_score?.toFixed(0)}%)
-                        </p>
-                      ))}
+                  {/* Right: AI Proposed Schedule Task */}
+                  <div className={clsx(
+                    "p-4 rounded-xl border space-y-2.5",
+                    isDark ? "bg-slate-950/60 border-slate-800" : "bg-purple-50/50 border-purple-200"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/15 border border-purple-500/30 px-2 py-0.5 rounded">
+                        Proposed Schedule Activity
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Notes + Actions */}
-              <div className="border-t border-slate-700/30 pt-3">
-                <textarea
-                  placeholder="Optional reviewer notes (reason for approval/rejection)…"
-                  value={notes[m.id] || ''}
-                  onChange={e => setNotes(prev => ({ ...prev, [m.id]: e.target.value }))}
-                  className="input-field mb-3 h-16 resize-none text-xs"
-                />
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleDecision(m.id, 'approved')}
-                    disabled={reviewing === m.id}
-                    className="btn-success"
-                  >
-                    <Check className="w-4 h-4" /> Approve Match
-                  </button>
-                  <button
-                    onClick={() => handleDecision(m.id, 'rejected')}
-                    disabled={reviewing === m.id}
-                    className="btn-danger"
-                  >
-                    <X className="w-4 h-4" /> Reject
-                  </button>
-                  <p className="text-slate-600 text-xs ml-auto">
-                    Confidence: <span className="text-yellow-400 font-mono">{m.confidence_score?.toFixed(1)}%</span>
-                    {' '}· Below {75}% threshold
-                  </p>
+                    <div>
+                      <p className={clsx("font-bold text-sm", isDark ? "text-slate-100" : "text-slate-900")}>
+                        {m.matched_activity?.activity_name || 'Baseline Task'}
+                      </p>
+                      <p className="font-mono text-xs text-slate-400 mt-0.5">
+                        {m.matched_activity?.activity_id} · Level {m.matched_activity?.level}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1 text-xs text-slate-400 pt-2 border-t border-slate-800/60">
+                      <div className="flex justify-between">
+                        <span>Target Planned Progress:</span>
+                        <span className="font-mono text-slate-200">{m.matched_activity?.planned_progress}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Current Actual Progress:</span>
+                        <span className="font-mono text-slate-200">{m.matched_activity?.actual_progress}%</span>
+                      </div>
+                    </div>
+
+                    {/* Alternatives */}
+                    {m.alternative_matches && m.alternative_matches.length > 0 && (
+                      <div className="pt-2 border-t border-slate-800/60">
+                        <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Other Candidates Considered:</p>
+                        {m.alternative_matches.map((alt: any, i: number) => (
+                          <p key={i} className="text-[11px] text-slate-400 truncate">
+                            • {alt.activity_id} — {alt.activity_name} ({alt.confidence_score?.toFixed(0)}%)
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Reviewer Notes & Decision Buttons */}
+                <div className="pt-2 border-t border-slate-800/60 space-y-3">
+                  <textarea
+                    rows={1}
+                    placeholder="Enter reason for approval or rejection (optional)..."
+                    value={notes[m.id] || ''}
+                    onChange={e => setNotes(prev => ({ ...prev, [m.id]: e.target.value }))}
+                    className={clsx(inputField, "resize-none text-xs")}
+                  />
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDecision(m.id, 'approved')}
+                      disabled={isReviewing}
+                      className={btnSuccess}
+                    >
+                      <Check className="w-3.5 h-3.5" /> Approve Match
+                    </button>
+                    <button
+                      onClick={() => handleDecision(m.id, 'rejected')}
+                      disabled={isReviewing}
+                      className={btnDanger}
+                    >
+                      <X className="w-3.5 h-3.5" /> Reject Match
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

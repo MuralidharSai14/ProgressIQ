@@ -23,14 +23,32 @@ class Settings(BaseSettings):
     confidence_threshold: float = 75.0   # Below this → Human Review Queue
     max_upload_size_mb: int = 50
     app_name: str = "PROGRESSIQ"
-    app_version: str = "1.0.0"
+    app_version: str = "2.0.0"
+
+    # Authentication & Security
+    jwt_secret_key: str = "progressiq-super-secret-key-change-in-production-2026"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 
     # Database
     database_url: str = "sqlite:///./progressiq.db"
 
-    # Server
+    # File Storage
+    storage_provider: str = "local"     # "local" | "supabase" | "s3"
+    storage_local_dir: str = "uploads"
+    public_url_base: str = ""           # e.g. "http://localhost:8000" or cloud base URL
+    supabase_url: str = ""
+    supabase_key: str = ""
+    supabase_bucket: str = "evidence-files"
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_region: str = "us-east-1"
+    aws_s3_bucket: str = "progressiq-uploads"
+
+    # Server & CORS
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
+    cors_origins: str = "*"
 
 
 @lru_cache()

@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Cloud PostgreSQL (Optional local replacement for Supabase)
+  db:
+    image: postgres:16-alpine
+    container_name: progressiq-db
+    restart: always
+    environment:
+      POSTGRES_USER: progressiq
+      POSTGRES_PASSWORD: progressiq_secret_password
+      POSTGRES_DB: progressiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U progressiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: progressiq-backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://progressiq:progressiq_secret_password@db:5432/progressiq
+      - JWT_SECRET=progressiq_production_secure_jwt_secret_key_2026
+      - STORAGE_PROVIDER=local
+      - AI_PROVIDER=gemini
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - HOST=0.0.0.0
+      - PORT=8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # React Frontend Service with Nginx
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: progressiq-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  backend_uploads:

@@ -5,24 +5,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database.connection import get_db
-from app.models.models import Project, ScheduleActivity
-from app.schemas.schemas import ScheduleActivityOut
+from app.schemas.schemas import ScheduleActivityOut, ScheduleUploadSummary
 from app.processors.schedule import parse_schedule_file
 from app.processors.document import sanitize_filename
 from app.ai.embeddings import encode_text
+from app.services.event_broadcaster import emit_project_update
 from app.config import get_settings
 
 router = APIRouter()
 settings = get_settings()
 
-ALLOWED_TYPES = {
-    "text/csv", "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/octet-stream",
-}
 
-
-@router.post("/projects/{project_id}/schedule/upload")
+@router.post("/projects/{project_id}/schedule/upload", response_model=ScheduleUploadSummary)
 async def upload_schedule(
     project_id: int,
     file: UploadFile = File(...),
@@ -36,8 +30,8 @@ async def upload_schedule(
 
     # Validate file
     filename = sanitize_filename(file.filename or "upload")
-    if not filename.lower().endswith((".csv", ".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Only CSV and Excel files are supported.")
+    if not filename.lower().endswith((".csv", ".xlsx", ".xls", ".json", ".xer", ".xml")):
+        raise HTTPException(status_code=400, detail="Only Primavera P6 (.xer, .xml), CSV, Excel (.xlsx, .xls), and JSON files are supported.")
 
     content = await file.read()
     if len(content) > settings.max_upload_size_mb * 1024 * 1024:
@@ -45,11 +39,17 @@ async def upload_schedule(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # Parse
+    # Parse with detailed row reporting
     try:
-        activities = parse_schedule_file(content, filename)
+        activities, errors, total_rows = parse_schedule_file(content, filename)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+    if not activities:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No valid activities could be parsed from {filename}. Errors: {len(errors)}",
+        )
 
     # Delete existing activities for this project
     existing = await db.execute(select(ScheduleActivity).where(ScheduleActivity.project_id == project_id))
@@ -80,12 +80,30 @@ async def upload_schedule(
         inserted += 1
 
     await db.commit()
-    return {
-        "success": True,
-        "message": f"Schedule uploaded: {inserted} activities imported.",
-        "activities_count": inserted,
-        "filename": filename,
-    }
+
+    # Emit real-time event
+    await emit_project_update(
+        project_id=project_id,
+        event_type="schedule_updated",
+        data={
+            "activities_count": inserted,
+            "filename": filename,
+        },
+    )
+
+    summary_msg = f"Imported {inserted} activities successfully."
+    if errors:
+        summary_msg = f"{inserted} imported, {len(errors)} require correction."
+
+    return ScheduleUploadSummary(
+        success=True,
+        message=summary_msg,
+        total_rows=total_rows,
+        imported_count=inserted,
+        error_count=len(errors),
+        errors=errors[:20],
+        filename=filename,
+    )
 
 
 @router.get("/projects/{project_id}/schedule", response_model=list[ScheduleActivityOut])

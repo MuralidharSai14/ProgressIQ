@@ -10,6 +10,8 @@ from app.processors.document import split_into_paragraphs
 from app.ai.provider import get_ai_provider
 from app.config import get_settings
 
+import asyncio
+
 router = APIRouter()
 settings = get_settings()
 
@@ -26,7 +28,7 @@ async def extract_from_report(
 ):
     """
     Run AI extraction on a field report.
-    Splits text into paragraphs and extracts structured data from each.
+    Splits text into paragraphs and extracts structured data from each concurrently.
     Returns a list of extracted updates.
     """
     result = await db.execute(select(FieldReport).where(FieldReport.id == data.field_report_id))
@@ -43,28 +45,33 @@ async def extract_from_report(
     if not paragraphs:
         paragraphs = [text[:1000]]  # Use full text if no paragraphs found
 
-    # Limit to 20 paragraphs max per report
-    paragraphs = paragraphs[:20]
+    # Limit to 12 paragraphs max per report for responsiveness
+    paragraphs = paragraphs[:12]
 
     ai = get_ai_provider()
-    extracted_ids = []
+    semaphore = asyncio.Semaphore(5)
 
-    for i, para in enumerate(paragraphs):
-        try:
-            extraction = await ai.extract_field_update(para)
-        except Exception as e:
-            extraction = {
-                "activity_description": para[:100],
-                "status": "In Progress",
-                "progress": None,
-                "delay_reason": None,
-                "delay_category": None,
-                "risk_level": "Low",
-                "dependency_mentioned": None,
-                "extraction_confidence": 50.0,
-                "ai_provider": "error-fallback",
-            }
+    async def _extract_para(para: str):
+        async with semaphore:
+            try:
+                return await ai.extract_field_update(para)
+            except Exception:
+                return {
+                    "activity_description": para[:100],
+                    "status": "In Progress",
+                    "progress": None,
+                    "delay_reason": None,
+                    "delay_category": None,
+                    "risk_level": "Low",
+                    "dependency_mentioned": None,
+                    "extraction_confidence": 50.0,
+                    "ai_provider": "error-fallback",
+                }
 
+    # Run extractions concurrently
+    extractions = await asyncio.gather(*[_extract_para(p) for p in paragraphs])
+
+    for para, extraction in zip(paragraphs, extractions):
         update = ExtractedUpdate(
             field_report_id=data.field_report_id,
             activity_description=extraction.get("activity_description"),

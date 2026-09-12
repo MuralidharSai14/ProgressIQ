@@ -40,6 +40,21 @@ def extract_text_from_txt(content: bytes) -> str:
         return ""
 
 
+def extract_text_from_docx(content: bytes) -> str:
+    """Extract text from a Word DOCX file."""
+    try:
+        import docx
+        doc = docx.Document(io.BytesIO(content))
+        full_text = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                full_text.append(para.text)
+        return "\n".join(full_text)
+    except Exception as e:
+        logger.error(f"DOCX extraction error: {e}")
+        return ""
+
+
 def split_into_paragraphs(text: str, min_length: int = 30) -> list[str]:
     """
     Split field report text into meaningful paragraphs/chunks.

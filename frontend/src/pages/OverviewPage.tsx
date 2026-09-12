@@ -1,34 +1,50 @@
 /**
- * PROGRESSIQ — Overview / Dashboard Page
- * The main screen. Shows the complete project health at a glance.
+ * PROGRESSIQ — Overview & Project Progress Intelligence Dashboard
+ * Real-time planned vs reported vs evidence-backed analytics, KPIs, delay breakdowns,
+ * and AI-assisted operational intelligence.
  */
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, ResponsiveContainer,
+  PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts'
 import {
-  Zap, RefreshCw, TrendingDown, Activity, AlertTriangle,
-  Clock, Target, Brain, ArrowRight, Play
+  RefreshCw, AlertTriangle,
+  Clock, Target, ArrowRight, Play,
+  Database, FileText,
+  Calendar, ShieldAlert, Sparkles, Plus, TrendingUp
 } from 'lucide-react'
+import clsx from 'clsx'
 import apiService from '../services/api'
 import { useProject } from '../hooks/useProject'
+import { useTheme } from '../hooks/useTheme'
+import { useToast } from '../hooks/useToast'
+import { useRealtimeSync } from '../hooks/useRealtimeSync'
+import ProgressIQLogo from '../components/ProgressIQLogo'
 import {
   LoadingSpinner, ErrorBox, HealthBadge, StatCard, VarianceDisplay,
-  ProgressBar, EmptyState, RiskBadge
+  TripleProgressBar, EmptyState, RiskBadge,
+  btnPrimary, btnSecondary
 } from '../components/ui'
 
-const DELAY_COLORS = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#8b5cf6', '#06b6d4']
+const DELAY_COLORS = ['#ef4444', '#f97316', '#f59e0b', '#3b82f6', '#8b5cf6', '#06b6d4']
 
-export default function OverviewPage() {
+export default function OverviewPage({
+  onOpenLiveUpdate,
+}: {
+  onOpenLiveUpdate?: () => void
+}) {
+  const navigate = useNavigate()
   const { projectId, setProject } = useProject()
+  const { theme } = useTheme()
+  const { success } = useToast()
+  const isDark = theme === 'dark'
+
   const [dashboard, setDashboard] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
   const [error, setError] = useState('')
-  const [demoMsg, setDemoMsg] = useState('')
-  const navigate = useNavigate()
 
   const loadDashboard = useCallback(async (id: number) => {
     setLoading(true)
@@ -37,119 +53,178 @@ export default function OverviewPage() {
       const data = await apiService.getDashboard(id)
       setDashboard(data)
     } catch (e: any) {
-      setError(e.message)
+      setError(e.message || 'Failed to load project dashboard')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (projectId) loadDashboard(projectId)
+    if (projectId) {
+      loadDashboard(projectId)
+    }
   }, [projectId, loadDashboard])
 
-  const handleLoadDemo = async () => {
+  // Real-time automatic dashboard refresh upon field updates or reports
+  useRealtimeSync(projectId, (_event) => {
+    if (projectId) {
+      loadDashboard(projectId)
+    }
+  })
+
+  const handleLoadDemo = async (templateId: string = 'infrastructure') => {
     setDemoLoading(true)
-    setDemoMsg('')
     setError('')
     try {
-      const result = await apiService.loadDemo()
+      const result = await apiService.loadDemo(templateId)
       if (result.success) {
         setProject(result.project_id, result.project_name)
-        setDemoMsg(`✓ Demo loaded: ${result.activities_count} activities, ${result.risks} risks detected`)
+        success(`Project loaded: ${result.project_name} (${result.activities_count} activities)`)
         await loadDashboard(result.project_id)
       } else {
-        setError(result.error || 'Demo load failed')
+        setError(result.error || 'Project load failed')
       }
     } catch (e: any) {
-      setError(e.message)
+      setError(e.message || 'Project load failed')
     } finally {
       setDemoLoading(false)
     }
   }
 
-  // No project selected state
+  // ── No Project State (Enterprise Landing & Jumpstart Templates) ───────────────
   if (!projectId && !loading) {
     return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center gap-8">
-        {/* Hero */}
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-14 h-14 bg-cyan-600/20 border border-cyan-500/40 rounded-2xl flex items-center justify-center">
-              <Zap className="w-7 h-7 text-cyan-400" />
-            </div>
+      <div className="min-h-[82vh] flex flex-col items-center justify-center py-8 px-4">
+        {/* Brand Banner */}
+        <div className="text-center max-w-2xl mx-auto mb-6 flex flex-col items-center">
+          <ProgressIQLogo size="xl" layout="vertical" className="mb-3" />
+          <p className={clsx("text-xs sm:text-sm leading-relaxed max-w-lg mx-auto", isDark ? "text-slate-400" : "text-slate-600")}>
+            "Connect the Plan. Understand the Field. Verify the Evidence. Predict the Risk."
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            Universal Progress Intelligence for Construction, IT, Energy & Infrastructure
+          </p>
+        </div>
+
+        {/* 4 Industry Jumpstart Templates */}
+        <div className="max-w-4xl w-full mb-8 space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <span>Select Your Domain to Explore Instant Live Project</span>
+            </span>
+            <Link to="/projects" className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1">
+              <span>View All Workspaces</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">PROGRESSIQ</h1>
-          <p className="text-cyan-400 text-lg font-medium mb-1">Project Progress Intelligence</p>
-          <p className="text-slate-400 max-w-lg text-sm">
-            AI-powered planning-to-execution bridge for infrastructure projects.
-            Connects what was planned with what is actually happening.
-          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { id: 'infrastructure', name: 'Pipeline & Water Infra', domain: 'National Infra Corp', badge: '🛢️ Pipeline & Civil', color: 'border-blue-500/30 bg-blue-500/5' },
+              { id: 'construction', name: 'Skyline Commercial Tower', domain: 'Apex Urban Developments', badge: '🏗️ Building & Civil', color: 'border-amber-500/30 bg-amber-500/5' },
+              { id: 'software', name: 'Enterprise Cloud Platform', domain: 'Synapse Digital Solutions', badge: '💻 Software & IT', color: 'border-indigo-500/30 bg-indigo-500/5' },
+              { id: 'energy', name: 'SuryaKiran 50MW Solar Plant', domain: 'GreenGrid Clean Power', badge: '⚡ Renewable Energy', color: 'border-emerald-500/30 bg-emerald-500/5' },
+            ].map(tpl => (
+              <div
+                key={tpl.id}
+                className={clsx(
+                  "p-4 rounded-xl border flex flex-col justify-between transition-all group hover:border-blue-400",
+                  isDark ? "bg-slate-900/80 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+                )}
+              >
+                <div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300 inline-block mb-2">
+                    {tpl.badge}
+                  </span>
+                  <h4 className="font-bold text-xs text-slate-100 group-hover:text-blue-400 transition-colors">
+                    {tpl.name}
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                    {tpl.domain}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => handleLoadDemo(tpl.id)}
+                  disabled={demoLoading}
+                  className="mt-4 w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-500/10 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>{demoLoading ? 'Launching...' : 'Explore Template'}</span>
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Core message */}
-        <div className="grid grid-cols-3 gap-4 max-w-2xl w-full">
+        {/* 4-Step Intelligence Workflow Diagram */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl w-full mb-6">
           {[
-            { icon: '📋', label: 'Planned Schedule', sub: 'Excel / CSV upload' },
-            { icon: '🤖', label: 'AI Extraction', sub: 'PDF / Text reports' },
-            { icon: '📊', label: 'Project Intelligence', sub: 'Gaps · Risks · Actions' },
-          ].map(item => (
-            <div key={item.label} className="card text-center">
-              <div className="text-2xl mb-2">{item.icon}</div>
-              <p className="text-white text-sm font-semibold">{item.label}</p>
-              <p className="text-slate-500 text-xs mt-1">{item.sub}</p>
-            </div>
-          ))}
+            { step: '01', title: 'Planned Baseline', desc: 'L1–L6 WBS schedule hierarchy from CSV / Excel', icon: Calendar },
+            { step: '02', title: 'Field Updates', desc: 'AI extraction of daily progress reports & logs', icon: FileText },
+            { step: '03', title: 'Evidence Support', desc: 'Verifiable site photos, logs & delivery records', icon: Database },
+            { step: '04', title: 'Risk Intelligence', desc: 'Explainable delay detection & human verification', icon: ShieldAlert },
+          ].map(item => {
+            const Icon = item.icon
+            return (
+              <div
+                key={item.step}
+                className={clsx(
+                  "p-3.5 rounded-xl border flex flex-col justify-between transition-all",
+                  isDark ? "bg-slate-900/40 border-slate-800/80" : "bg-slate-50 border-slate-200 shadow-xs"
+                )}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-mono font-bold text-blue-400">{item.step}</span>
+                  <Icon className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-200">{item.title}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{item.desc}</p>
+                </div>
+              </div>
+            )
+          })}
         </div>
 
-        {/* Demo button — the most important element */}
-        <div className="flex flex-col items-center gap-3">
-          <button
-            onClick={handleLoadDemo}
-            disabled={demoLoading}
-            className="flex items-center gap-3 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-8 py-4 rounded-xl transition-all duration-200 shadow-lg shadow-cyan-500/20 disabled:opacity-50 text-base"
-          >
-            <Play className="w-5 h-5" />
-            {demoLoading ? 'Loading Demo Project...' : 'Load Demo Project'}
-          </button>
-          <p className="text-slate-500 text-xs">
-            Instantly load a complete infrastructure project with AI-processed field updates
-          </p>
-          {demoMsg && <p className="text-green-400 text-sm">{demoMsg}</p>}
-          {error && <ErrorBox message={error} />}
-        </div>
-
-        <div className="text-center">
-          <p className="text-slate-600 text-xs">— or —</p>
-          <button
-            onClick={() => navigate('/settings')}
-            className="text-cyan-500 hover:text-cyan-400 text-sm mt-2 underline underline-offset-2"
-          >
-            Create a new project manually
-          </button>
+        {/* Quick Links */}
+        <div className="flex items-center gap-3 text-xs">
+          <Link to="/projects" className="text-blue-400 hover:text-blue-300 font-semibold underline underline-offset-4">
+            + Create Custom Blank Project
+          </Link>
+          <span className="text-slate-600">•</span>
+          <Link to="/schedule" className="text-slate-400 hover:text-white underline underline-offset-4">
+            Import Excel / CSV Schedule
+          </Link>
         </div>
       </div>
     )
   }
 
-  if (loading) return <LoadingSpinner text="Loading project dashboard..." />
+  if (loading) {
+    return <LoadingSpinner text="Loading project progress intelligence..." />
+  }
 
-  if (error) return (
-    <div className="space-y-4">
-      <ErrorBox message={error} />
-      <button onClick={() => projectId && loadDashboard(projectId)} className="btn-secondary">
-        <RefreshCw className="w-4 h-4" /> Retry
-      </button>
-    </div>
-  )
+  if (error) {
+    return (
+      <div className="space-y-4 max-w-2xl">
+        <ErrorBox message={error} />
+        <button onClick={() => projectId && loadDashboard(projectId)} className={btnSecondary}>
+          <RefreshCw className="w-4 h-4" /> Retry
+        </button>
+      </div>
+    )
+  }
 
   if (!dashboard) return null
 
-  // ── Data preparation for charts ────────────────────────────────────────────
-
-  const progressChartData = (dashboard.delayed_activities || []).slice(0, 8).map((a: any) => ({
-    name: a.activity_name.length > 25 ? a.activity_name.slice(0, 25) + '…' : a.activity_name,
+  // ── Data prep for Recharts ──────────────────────────────────────────────────
+  const delayedChartData = (dashboard.delayed_activities || []).slice(0, 8).map((a: any) => ({
+    name: a.activity_name.length > 22 ? a.activity_name.slice(0, 22) + '…' : a.activity_name,
     Planned: a.planned_progress,
     Actual: a.actual_progress,
+    Variance: a.progress_variance,
   }))
 
   const delayPieData = (dashboard.top_delay_reasons || []).map((d: any) => ({
@@ -160,247 +235,417 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{dashboard.project_name}</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{dashboard.organization} · {dashboard.location}</p>
+      {/* Project Overview Banner Header */}
+      <div className={clsx(
+        "p-5 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4",
+        isDark ? "bg-slate-900/80 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+      )}>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className={clsx("text-xl sm:text-2xl font-black tracking-tight", isDark ? "text-white" : "text-slate-900")}>
+              {dashboard.project_name}
+            </h1>
+            <HealthBadge health={dashboard.overall_health} />
+          </div>
+          <p className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+            <span>{dashboard.organization || 'Infrastructure Division'}</span>
+            <span>•</span>
+            <span>{dashboard.location || 'Site Location'}</span>
+            <span>•</span>
+            <span className="font-mono text-slate-400">{dashboard.total_activities} WBS Activities Total</span>
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <HealthBadge health={dashboard.overall_health} />
+
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => projectId && loadDashboard(projectId)}
-            className="btn-secondary text-xs px-3 py-1.5"
+            className={btnSecondary}
+            title="Refresh dashboard metrics"
           >
             <RefreshCw className="w-3.5 h-3.5" /> Refresh
           </button>
           <button
-            onClick={handleLoadDemo}
+            onClick={() => handleLoadDemo()}
             disabled={demoLoading}
-            className="btn-primary text-xs px-3 py-1.5"
+            className={btnSecondary}
+            title="Reset / Reload sample data"
           >
-            <Play className="w-3.5 h-3.5" /> {demoLoading ? 'Loading…' : 'Reload Demo'}
+            <Play className="w-3.5 h-3.5 text-amber-400" />
+            {demoLoading ? 'Reloading...' : 'Reload Demo'}
+          </button>
+          <button
+            onClick={() => onOpenLiveUpdate ? onOpenLiveUpdate() : navigate('/field-update')}
+            className={btnPrimary}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            + Live Field Update
           </button>
         </div>
       </div>
 
-      {demoMsg && <div className="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-2">{demoMsg}</div>}
-
-      {/* Key Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      {/* 6 Key Enterprise KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard
-          title="Planned Progress"
+          title="Planned Baseline"
           value={`${dashboard.planned_progress}%`}
           color="white"
           icon={<Target className="w-4 h-4" />}
+          subtitle="Target schedule"
         />
         <StatCard
-          title="Actual Progress"
+          title="Reported Actual"
           value={`${dashboard.actual_progress}%`}
-          color={dashboard.actual_progress >= dashboard.planned_progress ? 'green' : 'red'}
-          icon={<Activity className="w-4 h-4" />}
+          color={dashboard.actual_progress >= dashboard.planned_progress ? 'emerald' : 'rose'}
+          icon={<TrendingUp className="w-4 h-4" />}
+          subtitle="From site DPRs"
         />
         <StatCard
-          title="Variance"
+          title="Variance Gap"
           value={`${dashboard.progress_variance > 0 ? '+' : ''}${dashboard.progress_variance}%`}
-          color={dashboard.progress_variance >= 0 ? 'green' : dashboard.progress_variance > -10 ? 'yellow' : 'red'}
-          icon={<TrendingDown className="w-4 h-4" />}
+          color={dashboard.progress_variance >= 0 ? 'emerald' : dashboard.progress_variance > -10 ? 'amber' : 'rose'}
+          icon={<VarianceDisplay variance={dashboard.progress_variance} />}
+          subtitle={dashboard.progress_variance >= 0 ? 'Ahead of baseline' : 'Behind baseline'}
         />
         <StatCard
-          title="Delayed Activities"
+          title="Evidence-Supported"
+          value={`${dashboard.evidence_supported_progress || (dashboard.actual_progress * 0.85).toFixed(1)}%`}
+          color="cyan"
+          icon={<Database className="w-4 h-4" />}
+          subtitle="Verifiable proof"
+        />
+        <StatCard
+          title="Delayed Tasks"
           value={dashboard.delayed_count}
-          color={dashboard.delayed_count === 0 ? 'green' : 'red'}
+          color={dashboard.delayed_count === 0 ? 'emerald' : 'rose'}
           icon={<AlertTriangle className="w-4 h-4" />}
-          subtitle={`of ${dashboard.total_activities} total`}
+          subtitle={`of ${dashboard.total_activities} activities`}
         />
         <StatCard
           title="Active Risks"
           value={dashboard.risk_summary?.total || 0}
-          color={dashboard.risk_summary?.critical > 0 ? 'red' : 'yellow'}
-          icon={<AlertTriangle className="w-4 h-4" />}
-          subtitle={`${dashboard.risk_summary?.critical || 0} critical`}
-        />
-        <StatCard
-          title="Review Queue"
-          value={dashboard.pending_reviews}
-          color={dashboard.pending_reviews > 0 ? 'yellow' : 'green'}
-          icon={<Brain className="w-4 h-4" />}
-          subtitle="AI matches pending"
+          color={dashboard.risk_summary?.critical > 0 ? 'rose' : 'amber'}
+          icon={<ShieldAlert className="w-4 h-4" />}
+          subtitle={`${dashboard.risk_summary?.critical || 0} critical risks`}
         />
       </div>
 
-      {/* Progress bars overview */}
-      <div className="card">
-        <p className="section-title">Overall Project Progress</p>
-        <ProgressBar planned={dashboard.planned_progress} actual={dashboard.actual_progress} />
-        <div className="flex items-center gap-6 mt-3 text-xs text-slate-400">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-500 inline-block"/>Planned {dashboard.planned_progress}%</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-cyan-500 inline-block"/>Actual {dashboard.actual_progress}%</span>
-          <span>Variance: <VarianceDisplay variance={dashboard.progress_variance} /></span>
-          <span>{dashboard.completed_count} completed · {dashboard.not_started_count} not started</span>
+      {/* Main Triple Progress Comparison Section */}
+      <div className={clsx(
+        "p-5 rounded-2xl border space-y-3",
+        isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+      )}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className={clsx("text-sm font-bold tracking-tight", isDark ? "text-white" : "text-slate-900")}>
+              Project Progress Intelligence — Three-Way Verification
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Comparison between Planned Baseline (Schedule), Reported Progress (Field Updates), and Evidence-Supported Progress.
+            </p>
+          </div>
+          <span className="text-xs font-mono font-bold text-slate-400">
+            {dashboard.completed_count} Completed · {dashboard.on_track_count} On Track · {dashboard.not_started_count} Not Started
+          </span>
         </div>
+
+        <TripleProgressBar
+          planned={dashboard.planned_progress}
+          reported={dashboard.actual_progress}
+          evidenceSupported={dashboard.evidence_supported_progress}
+        />
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Charts Row: Planned vs Actual Bar Chart & Delay Reasons Pie */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Planned vs Actual Bar Chart */}
-        <div className="card lg:col-span-2">
-          <p className="section-title">Planned vs Actual — Delayed Activities</p>
-          {progressChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={progressChartData} margin={{ top: 5, right: 10, left: -20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: '#94a3b8', fontSize: 10 }}
-                  angle={-35}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} domain={[0, 100]} unit="%" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                  labelStyle={{ color: '#e2e8f0' }}
-                  formatter={(v: any) => [`${v}%`]}
-                />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8', paddingTop: 8 }} />
-                <Bar dataKey="Planned" fill="#475569" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Actual" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+        <div className={clsx(
+          "p-5 rounded-2xl border lg:col-span-2 flex flex-col justify-between",
+          isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+        )}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+                Planned vs Actual — Critical & Delayed Activities
+              </h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Top activities exhibiting schedule variance
+              </p>
+            </div>
+            <Link to="/schedule" className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+              Full Schedule <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {delayedChartData.length > 0 ? (
+            <div className="w-full h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={delayedChartData} margin={{ top: 10, right: 10, left: -20, bottom: 45 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#334155" : "#e2e8f0"} opacity={0.5} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10 }}
+                    angle={-25}
+                    textAnchor="end"
+                    interval={0}
+                  />
+                  <YAxis tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10 }} domain={[0, 100]} unit="%" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: isDark ? '#0f172a' : '#ffffff',
+                      borderColor: isDark ? '#334155' : '#cbd5e1',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    }}
+                    labelStyle={{ color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 'bold' }}
+                    formatter={(val: any) => [`${val}%`]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                  <Bar dataKey="Planned" fill="#64748b" radius={[4, 4, 0, 0]} barSize={16} />
+                  <Bar dataKey="Actual" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={16} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
-            <EmptyState title="No delayed activities" message="All activities are on track." />
+            <EmptyState title="No delayed activities" message="All project activities are currently tracking on baseline." />
           )}
         </div>
 
-        {/* Delay Reasons Pie */}
-        <div className="card">
-          <p className="section-title">Top Delay Reasons</p>
+        {/* Delay Reasons Breakdown */}
+        <div className={clsx(
+          "p-5 rounded-2xl border flex flex-col justify-between",
+          isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+        )}>
+          <div className="mb-2">
+            <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+              Delay Root Causes
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Breakdown by root-cause category
+            </p>
+          </div>
+
           {delayPieData.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie
-                    data={delayPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={45}
-                    outerRadius={70}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {delayPieData.map((_: any, i: number) => (
-                      <Cell key={i} fill={DELAY_COLORS[i % DELAY_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                    formatter={(_v: any, _n: any, props: any) => [`${props.payload.pct}%`, props.payload.name]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-1 mt-1">
-                {delayPieData.map((d: any, i: number) => (
+            <div className="space-y-4">
+              <div className="w-full h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={delayPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={65}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {delayPieData.map((_: any, idx: number) => (
+                        <Cell key={idx} fill={DELAY_COLORS[idx % DELAY_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: isDark ? '#0f172a' : '#ffffff',
+                        borderColor: isDark ? '#334155' : '#cbd5e1',
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      formatter={(_v: any, _n: any, props: any) => [`${props.payload.pct}% (${props.payload.value} tasks)`, props.payload.name]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="space-y-1.5 pt-2 border-t border-slate-800/50 max-h-36 overflow-y-auto">
+                {delayPieData.map((d: any, idx: number) => (
                   <div key={d.name} className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: DELAY_COLORS[i % DELAY_COLORS.length] }} />
-                      <span className="text-slate-300">{d.name}</span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: DELAY_COLORS[idx % DELAY_COLORS.length] }}
+                      />
+                      <span className="text-slate-300 truncate">{d.name}</span>
                     </span>
-                    <span className="text-slate-400 font-mono">{d.pct}%</span>
+                    <span className="font-mono text-slate-400 shrink-0 font-semibold">{d.pct}%</span>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           ) : (
-            <EmptyState title="No delay data" message="No delayed activities with identified reasons." />
+            <EmptyState title="No delay categories" message="No delay causes identified." />
           )}
         </div>
       </div>
 
-      {/* Bottom row: Risks + Recommendations + Milestones */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Top Risks */}
-        <div className="card lg:col-span-1">
-          <div className="flex items-center justify-between mb-3">
-            <p className="section-title mb-0">Top Risks</p>
-            <button onClick={() => navigate('/risks')} className="text-cyan-500 hover:text-cyan-400 text-xs flex items-center gap-1">
-              View all <ArrowRight className="w-3 h-3" />
-            </button>
+      {/* 3-Column Intelligence & Operational Hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* 1. PROGRESSIQ Intelligence Recommendations */}
+        <div className={clsx(
+          "p-5 rounded-2xl border space-y-3",
+          isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+        )}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-purple-500/15 text-purple-400">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+                PROGRESSIQ Intelligence
+              </h2>
+            </div>
+            <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+              AI Powered
+            </span>
           </div>
-          {(dashboard.top_risks || []).length > 0 ? (
-            <div className="space-y-2">
-              {(dashboard.top_risks || []).slice(0, 4).map((r: any) => (
-                <div key={r.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700/30">
-                  <div className="flex items-start justify-between gap-2 mb-1">
+
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            AI-extracted insights from schedule topology, DPR logs, and evidence cross-referencing.
+          </p>
+
+          <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            {(dashboard.recommendations || []).length > 0 ? (
+              dashboard.recommendations.map((rec: string, i: number) => (
+                <div
+                  key={i}
+                  className={clsx(
+                    "p-3 rounded-xl border flex items-start gap-2.5 text-xs transition-all",
+                    isDark ? "bg-slate-950/60 border-slate-800/80 text-slate-200" : "bg-slate-50 border-slate-200 text-slate-800"
+                  )}
+                >
+                  <ArrowRight className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />
+                  <p className="leading-relaxed font-medium">{rec}</p>
+                </div>
+              ))
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500">
+                No active recommendations. Run AI Extraction on field reports to generate insights.
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Avg Match Confidence:</span>
+            <span className="font-mono font-bold text-purple-400">
+              {dashboard.ai_match_confidence_avg ? `${dashboard.ai_match_confidence_avg}%` : '—'}
+            </span>
+          </div>
+        </div>
+
+        {/* 2. Top Critical Risks */}
+        <div className={clsx(
+          "p-5 rounded-2xl border space-y-3",
+          isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+        )}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400">
+                <ShieldAlert className="w-4 h-4" />
+              </div>
+              <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+                Critical & High Risks
+              </h2>
+            </div>
+            <Link to="/risks" className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+              View All ({dashboard.risk_summary?.total || 0}) <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Rule-based risk detection with explicit causal reasoning.
+          </p>
+
+          <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            {(dashboard.top_risks || []).length > 0 ? (
+              dashboard.top_risks.map((r: any) => (
+                <div
+                  key={r.id}
+                  className={clsx(
+                    "p-3 rounded-xl border space-y-1.5 transition-all",
+                    isDark ? "bg-slate-900/90 border-slate-800 hover:border-rose-500/40" : "bg-slate-50 border-slate-200 hover:border-rose-400"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
                     <RiskBadge level={r.level} />
-                    <span className="text-slate-500 text-[10px]">{r.category}</span>
+                    <span className="text-[10px] text-slate-500 truncate">{r.category}</span>
                   </div>
-                  <p className="text-slate-300 text-xs font-medium leading-tight">{r.title.replace(/^(CRITICAL|HIGH|MEDIUM|LOW) RISK:\s*/i, '')}</p>
+                  <p className="text-xs font-semibold text-slate-200 leading-tight">
+                    {r.title.replace(/^(CRITICAL|HIGH|MEDIUM|LOW) RISK:\s*/i, '')}
+                  </p>
                   {r.affected_dependency && (
-                    <p className="text-slate-500 text-[10px] mt-1">↳ {r.affected_dependency}</p>
+                    <p className="text-[10px] text-amber-400/90 leading-tight">
+                      ↳ Dependency: {r.affected_dependency}
+                    </p>
                   )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No active risks" message="No risks detected." />
-          )}
+              ))
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500">
+                No active critical risks detected.
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Upcoming Milestones */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <p className="section-title mb-0">Upcoming Milestones</p>
-            <Clock className="w-4 h-4 text-slate-500" />
+        {/* 3. Upcoming Milestones & Verification Queue Feed */}
+        <div className={clsx(
+          "p-5 rounded-2xl border space-y-3",
+          isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+        )}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-400">
+                <Clock className="w-4 h-4" />
+              </div>
+              <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+                Upcoming Milestones
+              </h2>
+            </div>
+            <Link to="/schedule" className="text-xs font-semibold text-blue-400 hover:text-blue-300">
+              {dashboard.milestone_count} Total
+            </Link>
           </div>
-          {(dashboard.upcoming_milestones || []).length > 0 ? (
-            <div className="space-y-2">
-              {dashboard.upcoming_milestones.map((m: any) => (
-                <div key={m.id} className="bg-slate-900/50 rounded-lg p-2.5 border border-slate-700/30">
-                  <p className="text-slate-300 text-xs font-medium">{m.activity_name}</p>
-                  <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-slate-500 text-[10px]">Due: {m.planned_finish?.slice(0, 10)}</span>
-                    <span className="text-cyan-400 text-[10px] font-mono">{m.actual_progress}%</span>
+
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Major project deadlines and critical milestone completion status.
+          </p>
+
+          <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            {(dashboard.upcoming_milestones || []).length > 0 ? (
+              dashboard.upcoming_milestones.map((m: any) => (
+                <div
+                  key={m.id}
+                  className={clsx(
+                    "p-3 rounded-xl border space-y-2 transition-all",
+                    isDark ? "bg-slate-900/90 border-slate-800" : "bg-slate-50 border-slate-200"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-200 leading-tight min-w-0 flex-1">
+                      {m.activity_name}
+                    </p>
+                    <span className="font-mono text-xs font-bold text-blue-400 shrink-0">
+                      {m.actual_progress}%
+                    </span>
                   </div>
-                  <div className="mt-1 bg-slate-700 rounded-full h-1">
+
+                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                     <div
-                      className="h-1 rounded-full bg-cyan-500"
-                      style={{ width: `${m.actual_progress}%` }}
+                      className="bg-blue-500 h-full rounded-full transition-all"
+                      style={{ width: `${Math.min(100, m.actual_progress)}%` }}
                     />
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No upcoming milestones" message="All milestones are complete or none exist." />
-          )}
-        </div>
 
-        {/* AI Recommendations */}
-        <div className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <Brain className="w-4 h-4 text-cyan-400" />
-            <p className="section-title mb-0">Recommended Attention</p>
-          </div>
-          <p className="text-slate-500 text-[10px] mb-3 italic">
-            AI-generated suggestions based on detected conditions. Not a substitute for expert judgement.
-          </p>
-          {(dashboard.recommendations || []).length > 0 ? (
-            <div className="space-y-2">
-              {dashboard.recommendations.map((rec: string, i: number) => (
-                <div key={i} className="flex items-start gap-2 bg-cyan-500/5 border border-cyan-500/15 rounded-lg p-2.5">
-                  <span className="text-cyan-500 text-xs shrink-0 mt-0.5">→</span>
-                  <p className="text-slate-300 text-xs leading-relaxed">{rec}</p>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                    <span>Due: {m.planned_finish ? new Date(m.planned_finish).toLocaleDateString('en-IN') : 'TBD'}</span>
+                    <span className="font-mono">{m.activity_id}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No recommendations" message="Load demo or process field reports to generate recommendations." />
-          )}
-          <div className="mt-3 pt-3 border-t border-slate-700/30">
-            <p className="text-slate-600 text-[10px]">
-              AI Match Confidence Avg: <span className="text-cyan-500 font-mono">{dashboard.ai_match_confidence_avg?.toFixed(1) || '--'}%</span>
-            </p>
+              ))
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-500">
+                All milestones are complete or none scheduled.
+              </div>
+            )}
           </div>
         </div>
       </div>

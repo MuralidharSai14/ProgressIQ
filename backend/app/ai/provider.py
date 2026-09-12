@@ -12,7 +12,10 @@ So we can swap AI providers without changing any other code.
 from app.config import get_settings
 import json
 import random
+import asyncio
+import logging
 
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -29,6 +32,8 @@ EXTRACTION_SCHEMA = {
     "delay_category": str,   # Material | Labour | Equipment | Weather | Approval | ...
     "risk_level": str,       # Low | Medium | High | Critical
     "dependency_mentioned": str,
+    "material_updates": list,  # List of {name, category, status, quantity_note}
+    "safety_hazards": list,    # List of {category, risk_score, description, ppe}
 }
 
 
@@ -94,6 +99,63 @@ class MockAIProvider:
         "pending": "Not Started",
     }
 
+    # Material mentions → (category, default_unit)
+    MATERIAL_KEYWORDS = {
+        "steel": ("Steel", "MT"),
+        "rebar": ("Steel", "MT"),
+        "structural steel": ("Steel", "MT"),
+        "concrete": ("Concrete", "m³"),
+        "cement": ("Concrete", "MT"),
+        "rcc": ("Concrete", "m³"),
+        "pipe": ("Piping", "m"),
+        "piping": ("Piping", "m"),
+        "cable": ("Electrical", "m"),
+        "electrical": ("Electrical", "nos"),
+        "transformer": ("Electrical", "nos"),
+        "valve": ("Piping", "nos"),
+        "fitting": ("Piping", "nos"),
+        "bolt": ("Consumables", "nos"),
+        "nut": ("Consumables", "nos"),
+        "chemical": ("Chemicals", "kg"),
+        "solvent": ("Chemicals", "L"),
+        "gravel": ("Civil", "m³"),
+        "sand": ("Civil", "m³"),
+        "brick": ("Civil", "nos"),
+        "instrument": ("Instrumentation", "nos"),
+        "sensor": ("Instrumentation", "nos"),
+    }
+
+    # Safety hazard trigger phrases → category
+    SAFETY_KEYWORDS = {
+        "working at height": ("Working at Height", "high"),
+        "scaffolding": ("Working at Height", "high"),
+        "fall": ("Working at Height", "critical"),
+        "excavation": ("Excavation", "high"),
+        "trench": ("Excavation", "high"),
+        "electrical hazard": ("Electrical Hazard", "high"),
+        "live wire": ("Electrical Hazard", "critical"),
+        "shock": ("Electrical Hazard", "high"),
+        "crane": ("Heavy Equipment", "medium"),
+        "heavy equipment": ("Heavy Equipment", "medium"),
+        "lifting": ("Heavy Equipment", "medium"),
+        "chemical exposure": ("Chemical Exposure", "high"),
+        "toxic": ("Chemical Exposure", "critical"),
+        "fire": ("Fire & Explosion", "critical"),
+        "explosion": ("Fire & Explosion", "critical"),
+        "welding": ("Fire & Explosion", "medium"),
+        "confined space": ("Confined Space", "high"),
+        "underground": ("Confined Space", "medium"),
+        "manual handling": ("Manual Handling", "low"),
+        "heavy lifting": ("Manual Handling", "medium"),
+        "noise": ("Noise & Vibration", "low"),
+        "vibration": ("Noise & Vibration", "low"),
+        "injured": ("General Site", "critical"),
+        "accident": ("General Site", "critical"),
+        "unsafe": ("General Site", "high"),
+        "hazard": ("General Site", "medium"),
+    }
+
+
     def _detect_delay_category(self, text: str) -> str:
         lower = text.lower()
         for keyword, category in self.DELAY_KEYWORDS.items():
@@ -130,6 +192,55 @@ class MockAIProvider:
         sentences = re.split(r'[.!?]', text.strip())
         first = sentences[0].strip() if sentences else text.strip()
         return first[:200] if len(first) > 200 else first
+
+    def _extract_material_updates(self, text: str) -> list:
+        """Detect material mentions in text and return structured list."""
+        lower = text.lower()
+        found = []
+        seen_categories = set()
+        for keyword, (category, unit) in self.MATERIAL_KEYWORDS.items():
+            if keyword in lower and category not in seen_categories:
+                seen_categories.add(category)
+                is_shortage = any(w in lower for w in ["shortage", "short", "insufficient", "unavailable", "not available", "delayed"])
+                is_delivered = any(w in lower for w in ["delivered", "received", "arrived", "dispatched"])
+                status = "shortage" if is_shortage else ("delivered" if is_delivered else "in_transit")
+                found.append({
+                    "name": keyword.title(),
+                    "category": category,
+                    "unit": unit,
+                    "status": status,
+                    "quantity_note": f"Mentioned in field report ({keyword})",
+                })
+        return found
+
+    def _extract_safety_hazards(self, text: str) -> list:
+        """Detect safety hazard mentions and return structured list."""
+        lower = text.lower()
+        found = []
+        seen_categories = set()
+        # PPE mapping per category
+        ppe_map = {
+            "Working at Height": ["Safety Harness", "Helmet", "Non-slip Footwear", "Safety Net"],
+            "Excavation": ["Helmet", "Steel-toe Boots", "Hi-Vis Vest", "Shoring Equipment"],
+            "Electrical Hazard": ["Insulated Gloves", "Arc Flash PPE", "Helmet", "Insulated Footwear"],
+            "Heavy Equipment": ["Helmet", "Hi-Vis Vest", "Steel-toe Boots", "Signal Person"],
+            "Chemical Exposure": ["Chemical Resistant Gloves", "Respirator", "Face Shield", "Protective Suit"],
+            "Fire & Explosion": ["Fire-Resistant Clothing", "Face Shield", "Gloves", "Fire Extinguisher"],
+            "Confined Space": ["SCBA/Respirator", "Gas Detector", "Safety Harness", "Lifeline"],
+            "Manual Handling": ["Back Support Belt", "Safety Gloves", "Steel-toe Boots"],
+            "Noise & Vibration": ["Earplugs", "Ear Muffs", "Anti-Vibration Gloves"],
+            "General Site": ["Helmet", "Hi-Vis Vest", "Steel-toe Boots", "Safety Gloves"],
+        }
+        for keyword, (category, risk_score) in self.SAFETY_KEYWORDS.items():
+            if keyword in lower and category not in seen_categories:
+                seen_categories.add(category)
+                found.append({
+                    "category": category,
+                    "risk_score": risk_score,
+                    "description": f"{category} hazard detected from field report mention of '{keyword}'",
+                    "ppe": ppe_map.get(category, ["Helmet", "Hi-Vis Vest", "Safety Boots"]),
+                })
+        return found
 
     async def extract_field_update(self, text: str) -> dict:
         """
@@ -170,9 +281,12 @@ class MockAIProvider:
             "delay_category": delay_category if is_delayed else None,
             "risk_level": risk_level,
             "dependency_mentioned": None,
+            "material_updates": self._extract_material_updates(text),
+            "safety_hazards": self._extract_safety_hazards(text),
             "extraction_confidence": round(random.uniform(78, 93), 1),
             "ai_provider": "mock",
         }
+
 
     async def generate_recommendations(self, context: dict) -> list[str]:
         """Generate actionable recommendations based on project context."""
@@ -206,15 +320,33 @@ class GeminiAIProvider:
         try:
             import google.generativeai as genai
             genai.configure(api_key=settings.gemini_api_key)
-            self.model = genai.GenerativeModel("gemini-1.5-flash")
+            
+            # Select working model with fallbacks
+            self.model = None
+            for model_name in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.5-flash", "gemini-2.5-flash-lite"]:
+                try:
+                    self.model = genai.GenerativeModel(model_name)
+                    break
+                except Exception:
+                    continue
+            
+            if self.model is None:
+                self.model = genai.GenerativeModel("gemini-3.6-flash")
+                
             self._available = True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to initialize Gemini AI: {e}")
             self._available = False
             self._fallback = MockAIProvider()
 
+    def _sync_generate(self, prompt: str) -> str:
+        """Helper to run synchronous Gemini generation."""
+        response = self.model.generate_content(prompt)
+        return response.text.strip()
+
     async def extract_field_update(self, text: str) -> dict:
         if not self._available or not settings.gemini_api_key:
-            return await self._fallback.extract_field_update(text)
+            return await MockAIProvider().extract_field_update(text)
 
         prompt = f"""
 You are an AI assistant for an infrastructure project management system.
@@ -234,14 +366,23 @@ Return ONLY a valid JSON object with these exact keys (use null for missing valu
   "delay_category": "Material|Labour|Equipment|Weather|Approval|Dependency|Contractor|External|Unknown|null",
   "risk_level": "Low|Medium|High|Critical",
   "dependency_mentioned": "any mentioned dependency or null",
-  "extraction_confidence": 0-100 (your confidence in this extraction)
+  "extraction_confidence": 0-100 (your confidence in this extraction),
+  "material_updates": [
+    {{"name": "material name", "category": "Steel|Concrete|Piping|Electrical|Civil|Structural|Mechanical|Instrumentation|Chemicals|Consumables|Other", "unit": "MT|m³|m|nos|kg|L", "status": "ordered|in_transit|delivered|delayed|shortage", "quantity_note": "brief note"}}
+  ],
+  "safety_hazards": [
+    {{"category": "Working at Height|Excavation|Electrical Hazard|Heavy Equipment|Chemical Exposure|Fire & Explosion|Confined Space|Manual Handling|Noise & Vibration|General Site", "risk_score": "low|medium|high|critical", "description": "brief description", "ppe": ["PPE item 1", "PPE item 2"]}}
+  ]
 }}
 
 Return ONLY the JSON object. No explanations.
 """
         try:
-            response = self.model.generate_content(prompt)
-            raw = response.text.strip()
+            # Run in thread pool with 9-second timeout to prevent frontend hangs
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(self._sync_generate, prompt),
+                timeout=9.0
+            )
             # Strip markdown code fences if present
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
@@ -249,10 +390,17 @@ Return ONLY the JSON object. No explanations.
                     raw = raw[4:]
             result = json.loads(raw.strip())
             result["ai_provider"] = "gemini"
-            result["extraction_confidence"] = float(result.get("extraction_confidence", 85))
+            result["extraction_confidence"] = float(result.get("extraction_confidence", 88))
+            result.setdefault("material_updates", [])
+            result.setdefault("safety_hazards", [])
+            return result
+        except asyncio.TimeoutError:
+            logger.warning("Gemini AI extraction timed out, falling back to mock parser")
+            result = await MockAIProvider().extract_field_update(text)
+            result["ai_provider"] = "gemini-timeout-fallback"
             return result
         except Exception as e:
-            # If Gemini fails, fall back to mock
+            logger.warning(f"Gemini AI extraction failed: {e}, falling back to mock parser")
             result = await MockAIProvider().extract_field_update(text)
             result["ai_provider"] = "gemini-fallback-mock"
             return result
@@ -272,14 +420,17 @@ Context: {json.dumps(context)}
 Return ONLY a JSON array of strings. No markdown.
 """
         try:
-            response = self.model.generate_content(prompt)
-            raw = response.text.strip()
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(self._sync_generate, prompt),
+                timeout=9.0
+            )
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
                     raw = raw[4:]
             return json.loads(raw.strip())
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Gemini AI recommendations failed: {e}, falling back to mock")
             return await MockAIProvider().generate_recommendations(context)
 
 

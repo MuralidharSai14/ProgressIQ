@@ -8,6 +8,53 @@ from typing import Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
+# ── Authentication & User Schemas ──────────────────────────────────────────
+
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    role: Optional[str] = "site_engineer"
+    organization: Optional[str] = None
+
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    email: str
+    full_name: str
+    role: str
+    organization: Optional[str]
+    is_active: bool
+    created_at: datetime
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class ProjectMemberCreate(BaseModel):
+    user_id: int
+    role: Optional[str] = "viewer"
+
+
+class ProjectMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    user_id: int
+    role: str
+    joined_at: datetime
+    user: Optional[UserOut] = None
+
+
 # ── Project Schemas ──────────────────────────────────────────────────────────
 
 class ProjectCreate(BaseModel):
@@ -28,6 +75,7 @@ class ProjectOut(BaseModel):
     location: Optional[str]
     status: str
     is_demo: bool
+    created_by_id: Optional[int] = None
     planned_start: Optional[datetime]
     planned_end: Optional[datetime]
     created_at: datetime
@@ -57,18 +105,67 @@ class ScheduleActivityOut(BaseModel):
     delay_category: Optional[str]
 
 
+class ScheduleUploadSummary(BaseModel):
+    success: bool
+    message: str
+    total_rows: int
+    imported_count: int
+    error_count: int
+    errors: list[dict] = []
+    filename: str
+
+
 # ── Field Report Schemas ──────────────────────────────────────────────────────
 
 class FieldReportOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     project_id: int
+    uploader_id: Optional[int] = None
+    uploader_name: Optional[str] = None
     filename: str
     file_type: str
+    file_url: Optional[str] = None
+    file_size: Optional[int] = None
     raw_text: Optional[str]
     report_date: Optional[datetime]
     source_label: Optional[str]
+    status: str
     uploaded_at: datetime
+
+
+# ── Live Field Update Schemas ────────────────────────────────────────────────
+
+class LiveFieldUpdateCreate(BaseModel):
+    activity_id: int
+    reported_progress: float
+    reporter_name: Optional[str] = "Site Engineer"
+    reported_date: Optional[datetime] = None
+    location: Optional[str] = None
+    remarks: Optional[str] = None
+    evidence_url: Optional[str] = None
+    evidence_type: Optional[str] = "photo"
+
+
+class LiveFieldUpdateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    activity_id: int
+    user_id: Optional[int] = None
+    reporter_name: str
+    reported_progress: float
+    previous_progress: Optional[float] = None
+    reported_date: datetime
+    location: Optional[str] = None
+    remarks: Optional[str] = None
+    evidence_url: Optional[str] = None
+    evidence_type: Optional[str] = "photo"
+    status: str
+    ai_confidence: Optional[float] = None
+    ai_notes: Optional[str] = None
+    created_at: datetime
+    activity_name: Optional[str] = None
 
 
 # ── Extracted Update Schemas ──────────────────────────────────────────────────
@@ -165,3 +262,98 @@ class ErrorResponse(BaseModel):
     success: bool = False
     error: str
     detail: Optional[str] = None
+
+
+# ── Material Shipment Schemas ─────────────────────────────────────────────────
+
+class MaterialShipmentCreate(BaseModel):
+    material_name: str
+    category: str = "Other"
+    supplier_name: Optional[str] = None
+    unit: str = "units"
+    required_quantity: float = 0.0
+    ordered_quantity: float = 0.0
+    delivered_quantity: float = 0.0
+    status: str = "ordered"
+    priority: str = "medium"
+    expected_delivery: Optional[datetime] = None
+    actual_delivery: Optional[datetime] = None
+    delay_reason: Optional[str] = None
+    notes: Optional[str] = None
+    activity_id: Optional[int] = None
+
+
+class MaterialShipmentUpdate(BaseModel):
+    delivered_quantity: Optional[float] = None
+    ordered_quantity: Optional[float] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    actual_delivery: Optional[datetime] = None
+    delay_reason: Optional[str] = None
+    notes: Optional[str] = None
+    supplier_name: Optional[str] = None
+
+
+class MaterialShipmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    activity_id: Optional[int]
+    material_name: str
+    category: str
+    supplier_name: Optional[str]
+    unit: str
+    required_quantity: float
+    ordered_quantity: float
+    delivered_quantity: float
+    status: str
+    priority: str
+    expected_delivery: Optional[datetime]
+    actual_delivery: Optional[datetime]
+    delay_reason: Optional[str]
+    notes: Optional[str]
+    is_demo: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+# ── Worker Safety Risk Schemas ────────────────────────────────────────────────
+
+class WorkerSafetyRiskCreate(BaseModel):
+    title: str
+    hazard_category: str = "General Site"
+    risk_score: str = "medium"
+    description: str
+    required_ppe: Optional[list[str]] = None
+    mitigation_plan: Optional[str] = None
+    compliance_status: str = "pending_review"
+    affected_workers: Optional[int] = None
+    activity_id: Optional[int] = None
+
+
+class WorkerSafetyRiskUpdate(BaseModel):
+    compliance_status: Optional[str] = None
+    mitigation_plan: Optional[str] = None
+    risk_score: Optional[str] = None
+    required_ppe: Optional[list[str]] = None
+    is_resolved: Optional[bool] = None
+    affected_workers: Optional[int] = None
+
+
+class WorkerSafetyRiskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    activity_id: Optional[int]
+    title: str
+    hazard_category: str
+    risk_score: str
+    description: str
+    required_ppe: Optional[str]   # stored as JSON string
+    mitigation_plan: Optional[str]
+    compliance_status: str
+    affected_workers: Optional[int]
+    is_resolved: bool
+    detected_at: datetime
+    resolved_at: Optional[datetime]
+    is_demo: bool

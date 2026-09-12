@@ -1,24 +1,38 @@
 /**
- * Settings Page — Project management and configuration
+ * PROGRESSIQ — System Settings & Project Configuration Page
+ * Backend health diagnostics, AI provider status, project CRUD, and environment configuration.
  */
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Play } from 'lucide-react'
+import {
+  Plus, Trash2, Play,
+  Server,
+  RefreshCw, Layers, Terminal
+} from 'lucide-react'
+import clsx from 'clsx'
 import apiService from '../services/api'
 import { useProject } from '../hooks/useProject'
-import { PageHeader, ErrorBox, SuccessBox, LoadingSpinner } from '../components/ui'
+import { useTheme } from '../hooks/useTheme'
+import { useToast } from '../hooks/useToast'
+import {
+  PageHeader,
+  btnPrimary, btnSecondary, inputField
+} from '../components/ui'
 
 export default function SettingsPage() {
   const { projectId, setProject, clearProject } = useProject()
+  const { theme } = useTheme()
+  const { success, error } = useToast()
+  const isDark = theme === 'dark'
+
   const [projects, setProjects] = useState<any[]>([])
   const [health, setHealth] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [demoLoading, setDemoLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
+
   const [newName, setNewName] = useState('')
   const [newOrg, setNewOrg] = useState('')
   const [newLocation, setNewLocation] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [demoLoading, setDemoLoading] = useState(false)
 
   const fetchData = async () => {
     setLoading(true)
@@ -27,175 +41,337 @@ export default function SettingsPage() {
         apiService.listProjects(),
         apiService.health(),
       ])
-      setProjects(p)
+      setProjects(p || [])
       setHealth(h)
-    } catch (e: any) { setError(e.message) }
-    finally { setLoading(false) }
+    } catch (e: any) {
+      error(e.message || 'Failed to load system diagnostics')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+  }, [])
 
-  const handleCreate = async () => {
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!newName.trim()) return
-    setCreating(true); setError(''); setSuccess('')
+    setCreating(true)
     try {
       const proj = await apiService.createProject({
-        name: newName,
-        organization: newOrg || undefined,
-        location: newLocation || undefined,
+        name: newName.trim(),
+        organization: newOrg.trim() || undefined,
+        location: newLocation.trim() || undefined,
       })
-      setSuccess(`Project "${proj.name}" created`)
-      setNewName(''); setNewOrg(''); setNewLocation('')
+      success(`Project "${proj.name}" created successfully.`)
+      setNewName('')
+      setNewOrg('')
+      setNewLocation('')
       setProject(proj.id, proj.name)
       await fetchData()
-    } catch (e: any) { setError(e.message) }
-    finally { setCreating(false) }
+    } catch (e: any) {
+      error(e.message || 'Failed to create project')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const handleDelete = async (id: number, name: string) => {
-    if (!window.confirm(`Delete project "${name}"? This cannot be undone.`)) return
+    if (!window.confirm(`Delete project "${name}"? This action cannot be undone.`)) return
     try {
       await apiService.deleteProject(id)
-      if (projectId === id) clearProject()
+      success(`Deleted project "${name}".`)
+      if (projectId === id) {
+        clearProject()
+      }
       await fetchData()
-      setSuccess(`Deleted "${name}"`)
-    } catch (e: any) { setError(e.message) }
+    } catch (e: any) {
+      error(e.message || 'Failed to delete project')
+    }
   }
 
   const handleLoadDemo = async () => {
-    setDemoLoading(true); setError(''); setSuccess('')
+    setDemoLoading(true)
     try {
       const result = await apiService.loadDemo()
-      setProject(result.project_id, result.project_name)
-      setSuccess(`Demo loaded: ${result.project_name}`)
-      await fetchData()
-    } catch (e: any) { setError(e.message) }
-    finally { setDemoLoading(false) }
+      if (result.success) {
+        setProject(result.project_id, result.project_name)
+        success(`Demo project initialized: ${result.project_name}`)
+        await fetchData()
+      }
+    } catch (e: any) {
+      error(e.message || 'Demo initialization failed')
+    } finally {
+      setDemoLoading(false)
+    }
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <PageHeader title="Settings" subtitle="Project management and system configuration" />
+    <div className="space-y-6 max-w-4xl">
+      <PageHeader
+        title="System Settings & Diagnostics"
+        subtitle="Backend connection health, AI semantic model status, project workspaces, and environment configuration"
+      >
+        <button
+          onClick={fetchData}
+          className={btnSecondary}
+          title="Refresh diagnostics"
+        >
+          <RefreshCw className={clsx("w-3.5 h-3.5", loading && "animate-spin")} /> Refresh
+        </button>
+      </PageHeader>
 
-      {error && <ErrorBox message={error} />}
-      {success && <SuccessBox message={success} />}
-
-      {/* Backend Health */}
+      {/* 1. Backend Diagnostics */}
       {health && (
-        <div className="card">
-          <p className="section-title">System Status</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: 'API', value: health.status === 'ok' ? '✓ Online' : '✗ Error', ok: health.status === 'ok' },
-              { label: 'AI Provider', value: health.ai_provider, ok: true },
-              { label: 'Semantic Matching', value: health.semantic_matching ? '✓ Active' : '↻ TF-IDF fallback', ok: health.semantic_matching },
-              { label: 'Confidence Threshold', value: `${health.confidence_threshold}%`, ok: true },
-            ].map(s => (
-              <div key={s.label} className="bg-slate-900/50 rounded-lg p-2.5">
-                <p className="text-slate-600 text-[9px] uppercase mb-1">{s.label}</p>
-                <p className={`text-sm font-medium font-mono ${s.ok ? 'text-green-400' : 'text-yellow-400'}`}>{s.value}</p>
-              </div>
-            ))}
+        <div className={clsx(
+          "p-5 rounded-2xl border space-y-4",
+          isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+        )}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Server className="w-4 h-4 text-blue-400" />
+              <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+                Engine Health & Inference Diagnostics
+              </h2>
+            </div>
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> API Online
+            </span>
           </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block mb-0.5">AI Engine Mode</span>
+              <span className="font-mono font-bold text-purple-400 uppercase">{health.ai_provider}</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block mb-0.5">Semantic Vector Matching</span>
+              <span className={clsx("font-mono font-bold", health.semantic_matching ? "text-emerald-400" : "text-amber-400")}>
+                {health.semantic_matching ? '✓ Active' : '↻ TF-IDF Fallback'}
+              </span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block mb-0.5">Confidence Cutoff</span>
+              <span className="font-mono font-bold text-blue-400">{health.confidence_threshold}%</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block mb-0.5">Backend Protocol</span>
+              <span className="font-mono font-bold text-slate-300">FastAPI / Uvicorn</span>
+            </div>
+          </div>
+
           {!health.semantic_matching && (
-            <p className="text-yellow-400 text-xs mt-3">
-              ℹ️ sentence-transformers model not loaded. Install with:{' '}
-              <code className="bg-slate-900 px-1 py-0.5 rounded text-yellow-300">pip install sentence-transformers torch</code>.
-              TF-IDF fallback is active — matching still works but is less accurate.
-            </p>
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+              <p className="font-semibold">Notice regarding dense vector embeddings:</p>
+              <p className="text-[11px] text-amber-400/90 mt-0.5">
+                Install <code className="bg-slate-900 px-1 py-0.5 rounded text-amber-200">sentence-transformers torch</code> to activate dense neural embeddings. PROGRESSIQ is currently operating in high-performance TF-IDF cosine fallback mode.
+              </p>
+            </div>
           )}
         </div>
       )}
 
-      {/* Demo */}
-      <div className="card border border-cyan-500/20">
-        <p className="section-title">Demo Mode</p>
-        <p className="text-slate-400 text-sm mb-3">
-          Load the complete Indravati River Pumping Station demo project with 70 activities, field reports, AI extractions, and risks.
+      {/* 2. Sample Demo Dataset */}
+      <div className={clsx(
+        "p-5 rounded-2xl border space-y-3",
+        isDark ? "bg-slate-900/70 border-blue-500/30" : "bg-white border-blue-200 shadow-xs"
+      )}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Play className="w-4 h-4 text-blue-400 fill-current" />
+            <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+              Sample Infrastructure Dataset
+            </h2>
+          </div>
+          <span className="text-[10px] font-mono uppercase bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded font-bold">
+            Indravati Pumping Station
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Instantly resets or populates the complete sample infrastructure project with 70 WBS tasks, multi-day DPR reports, AI extractions, linked site photographs, material delivery vouchers, and active delay risks.
         </p>
-        <button onClick={handleLoadDemo} disabled={demoLoading} className="btn-primary">
-          <Play className="w-4 h-4" />
-          {demoLoading ? 'Loading…' : 'Load Demo Project'}
+
+        <button
+          onClick={handleLoadDemo}
+          disabled={demoLoading}
+          className={btnPrimary}
+        >
+          <Play className="w-3.5 h-3.5 fill-current" />
+          {demoLoading ? 'Initializing Dataset...' : 'Load / Reset Demo Project'}
         </button>
       </div>
 
-      {/* Create Project */}
-      <div className="card">
-        <p className="section-title">Create New Project</p>
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="Project name *"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            className="input-field"
-          />
-          <input
-            type="text"
-            placeholder="Organization"
-            value={newOrg}
-            onChange={e => setNewOrg(e.target.value)}
-            className="input-field"
-          />
-          <input
-            type="text"
-            placeholder="Location"
-            value={newLocation}
-            onChange={e => setNewLocation(e.target.value)}
-            className="input-field"
-          />
-          <button onClick={handleCreate} disabled={creating || !newName.trim()} className="btn-primary">
-            <Plus className="w-4 h-4" />
-            {creating ? 'Creating…' : 'Create Project'}
-          </button>
+      {/* 3. Create Project Workspace */}
+      <div className={clsx(
+        "p-5 rounded-2xl border space-y-4",
+        isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+      )}>
+        <div className="flex items-center gap-2">
+          <Plus className="w-4 h-4 text-blue-400" />
+          <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+            Create New Project Workspace
+          </h2>
         </div>
+
+        <form onSubmit={handleCreate} className="space-y-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-slate-400 font-semibold mb-1">Project Name *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Pipeline Expansion Phase II"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                className={inputField}
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-400 font-semibold mb-1">Organization / Client</label>
+              <input
+                type="text"
+                placeholder="e.g. Oil India Ltd"
+                value={newOrg}
+                onChange={e => setNewOrg(e.target.value)}
+                className={inputField}
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-400 font-semibold mb-1">Location / Site Code</label>
+              <input
+                type="text"
+                placeholder="e.g. Duliajan, Assam"
+                value={newLocation}
+                onChange={e => setNewLocation(e.target.value)}
+                className={inputField}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={creating || !newName.trim()}
+            className={btnPrimary}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            {creating ? 'Creating Workspace...' : 'Create Workspace'}
+          </button>
+        </form>
       </div>
 
-      {/* Project List */}
-      <div className="card">
-        <p className="section-title">All Projects</p>
-        {loading ? <LoadingSpinner text="Loading projects…" /> : projects.length === 0 ? (
-          <p className="text-slate-500 text-sm">No projects yet. Load the demo or create one above.</p>
+      {/* 4. Manage Existing Project Workspaces */}
+      <div className={clsx(
+        "p-5 rounded-2xl border space-y-3",
+        isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+      )}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-blue-400" />
+            <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+              Project Workspaces ({projects.length})
+            </h2>
+          </div>
+        </div>
+
+        {projects.length === 0 ? (
+          <p className="text-xs text-slate-500 py-4">No projects registered. Create one above or load the demo project.</p>
         ) : (
           <div className="space-y-2">
-            {projects.map(p => (
-              <div key={p.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${projectId === p.id ? 'border-cyan-500/40 bg-cyan-500/5' : 'border-slate-700/50 bg-slate-900/30'}`}>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-slate-200 text-sm font-medium">{p.name}</p>
-                    {p.is_demo && <span className="text-[9px] text-cyan-400 border border-cyan-500/30 px-1 py-0.5 rounded">DEMO</span>}
-                    {projectId === p.id && <span className="text-[9px] text-green-400 border border-green-500/30 px-1 py-0.5 rounded">ACTIVE</span>}
-                  </div>
-                  <p className="text-slate-500 text-xs">{p.organization || 'No organization'} · {new Date(p.created_at).toLocaleDateString('en-IN')}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {projectId !== p.id && (
-                    <button onClick={() => setProject(p.id, p.name)} className="btn-secondary text-xs px-2 py-1">
-                      Activate
-                    </button>
+            {projects.map(p => {
+              const isActive = projectId === p.id
+              return (
+                <div
+                  key={p.id}
+                  className={clsx(
+                    "p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all",
+                    isActive
+                      ? isDark ? "bg-blue-600/10 border-blue-500/40" : "bg-blue-50 border-blue-200"
+                      : isDark ? "bg-slate-950/40 border-slate-800" : "bg-slate-50 border-slate-200"
                   )}
-                  <button onClick={() => handleDelete(p.id, p.name)} className="text-slate-600 hover:text-red-400 transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className={clsx("font-bold text-xs truncate", isDark ? "text-slate-200" : "text-slate-800")}>
+                        {p.name}
+                      </p>
+                      {p.is_demo && (
+                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 uppercase">
+                          Demo
+                        </span>
+                      )}
+                      {isActive && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 uppercase">
+                          Active Workspace
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {p.organization || 'Client'} · {p.location || 'Site'} · Created {new Date(p.created_at).toLocaleDateString('en-IN')}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    {!isActive && (
+                      <button
+                        onClick={() => {
+                          setProject(p.id, p.name)
+                          success(`Activated workspace "${p.name}".`)
+                        }}
+                        className={clsx(btnSecondary, "py-1 px-2.5 text-xs")}
+                      >
+                        Activate
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(p.id, p.name)}
+                      className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
+                      title="Delete workspace"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Environment info */}
-      <div className="card border-slate-700/30">
-        <p className="section-title">Configuration</p>
-        <p className="text-slate-500 text-xs mb-2">
-          Edit <code className="text-cyan-400">.env</code> in the project root to configure:
-        </p>
-        <div className="bg-slate-900 rounded-lg p-3 font-mono text-xs space-y-1 text-slate-400">
-          <p><span className="text-cyan-400">AI_PROVIDER</span>=mock <span className="text-slate-600"># mock | gemini | openai</span></p>
-          <p><span className="text-cyan-400">GEMINI_API_KEY</span>=your_key_here</p>
-          <p><span className="text-cyan-400">CONFIDENCE_THRESHOLD</span>=75</p>
-          <p><span className="text-cyan-400">DATABASE_URL</span>=sqlite:///./progressiq.db</p>
+      {/* 5. Environment & Model Guide */}
+      <div className={clsx(
+        "p-5 rounded-2xl border space-y-3",
+        isDark ? "bg-slate-900/70 border-slate-800" : "bg-white border-slate-200 shadow-xs"
+      )}>
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4 text-slate-400" />
+          <h2 className={clsx("text-sm font-bold", isDark ? "text-white" : "text-slate-900")}>
+            Environment Configuration Reference
+          </h2>
         </div>
+
+        <p className="text-xs text-slate-400">
+          Configure AI providers (Gemini, OpenAI, Mock) and database URLs in <code className="text-blue-400 font-mono">.env</code>:
+        </p>
+
+        <pre className={clsx(
+          "p-3.5 rounded-xl text-xs font-mono leading-relaxed overflow-x-auto border",
+          isDark ? "bg-slate-950 border-slate-800 text-slate-300" : "bg-slate-100 border-slate-300 text-slate-800"
+        )}>
+{`# AI Provider Configuration (mock | gemini | openai)
+AI_PROVIDER=mock
+GEMINI_API_KEY=your_gemini_api_key_here
+CONFIDENCE_THRESHOLD=75
+
+# Database Connection (SQLite or PostgreSQL)
+DATABASE_URL=sqlite:///./progressiq.db`}
+        </pre>
       </div>
     </div>
   )

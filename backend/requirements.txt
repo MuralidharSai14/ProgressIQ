@@ -8,6 +8,12 @@ uvicorn[standard]==0.32.1
 # ---- Database ----
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
+asyncpg>=0.29.0
+
+# ---- Authentication & Security ----
+PyJWT>=2.8.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
 
 # ---- Data Validation ----
 pydantic==2.10.3
@@ -17,6 +23,7 @@ pydantic-settings==2.7.0
 pandas==2.2.3
 openpyxl==3.1.5
 PyMuPDF==1.24.14
+python-docx>=1.1.0
 
 # ---- AI & Embeddings ----
 # sentence-transformers for local semantic matching (no API key needed)
@@ -25,8 +32,9 @@ torch==2.5.1
 # Google Gemini SDK (optional - only needed if AI_PROVIDER=gemini)
 google-generativeai==0.8.3
 
-# ---- HTTP Client ----
+# ---- HTTP Client & Realtime ----
 httpx==0.28.1
+sse-starlette>=2.1.0
 
 # ---- Utilities ----
 python-multipart==0.0.20

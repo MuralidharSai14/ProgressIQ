@@ -9,14 +9,27 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# Convert sqlite:///./file.db → sqlite+aiosqlite:///./file.db for async support
-_db_url = settings.database_url.replace("sqlite:///", "sqlite+aiosqlite:///")
+def get_engine_and_url():
+    url = settings.database_url
+    connect_args = {}
 
-engine = create_async_engine(
-    _db_url,
-    echo=False,
-    connect_args={"check_same_thread": False},
-)
+    if url.startswith("sqlite:///"):
+        url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+        connect_args["check_same_thread"] = False
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    eng = create_async_engine(
+        url,
+        echo=False,
+        connect_args=connect_args,
+        pool_pre_ping=True,
+    )
+    return eng, url
+
+engine, _active_db_url = get_engine_and_url()
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

@@ -25,6 +25,7 @@ To provide a seamless, automated workflow that digests unstructured field report
 - **Raw Text Storage:** Store the raw parsed text and metadata (upload date, source label) for auditing.
 
 ### 5.3. AI Extraction Engine
+- **Provider Abstraction:** The system must support an abstraction layer to easily swap AI providers (e.g., a deterministic Mock AI for demo environments, and Google Gemini API for production) without altering core business logic.
 - **Automated Parsing:** The system must automatically analyze the raw text of field reports.
 - **Information Extraction:** AI must extract key details:
   - Activity description mentioned in the report
@@ -33,6 +34,9 @@ To provide a seamless, automated workflow that digests unstructured field report
   - Delay reasons and categories (e.g., Material, Labour, Weather)
   - Risk levels
   - Mentioned dependencies
+  - Material updates (e.g., shortages, deliveries, in-transit items)
+  - Safety hazards (including category, risk score, and required PPE)
+  - Actionable recommendations based on the current project context
 
 ### 5.4. Semantic Activity Matching
 - **AI Matching:** Extracted updates must be semantically matched against the existing schedule activities.

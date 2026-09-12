@@ -16,14 +16,14 @@ PROGRESSIQ follows a modern, decoupled client-server architecture.
 - **Framework:** FastAPI (Python), providing high performance and auto-generated OpenAPI documentation.
 - **Database ORM:** SQLAlchemy for mapping Python models to relational database tables.
 - **Database Schema:** Uses a robust relational model to track Projects, Schedule Activities, Field Reports, Extracted Updates, Activity Matches, Review Decisions, and Risks.
-- **AI Integration:** A modular AI service layer capable of routing raw text to an AI provider (e.g., OpenAI, Gemini, or a mock provider for testing) to extract structured progress data.
+- **AI Integration:** An AI Provider Abstraction Layer supporting seamless switching between a built-in Mock provider (for testing/demo) and Google Gemini API, allowing extraction of structured progress data, material updates, and safety hazards.
 
 ## 2. Core Workflows
 
 ### 2.1. The AI Extraction Workflow
 1. **Ingestion:** A user uploads a field report (e.g., a daily PDF log).
 2. **Parsing:** The backend extracts the raw text from the file.
-3. **Extraction:** The raw text is sent to the AI Provider, which returns structured JSON containing multiple `ExtractedUpdate` objects. These updates include detected progress, delays, risks, and descriptions.
+3. **Extraction:** The raw text is sent to the configured AI Provider (e.g., Mock, Gemini). It returns structured JSON containing multiple `ExtractedUpdate` objects, including detected progress, delays, risks, material updates, safety hazards, and actionable recommendations.
 4. **Storage:** The raw updates are saved in the database, linked to the original field report.
 
 ### 2.2. The Semantic Matching Workflow
