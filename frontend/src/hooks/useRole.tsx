@@ -1,89 +1,148 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import React, { createContext, useContext, useState } from 'react'
 
-export type UserRole = 
-  | 'project_manager'
-  | 'site_engineer'
-  | 'planning_engineer'
-  | 'project_controls'
-  | 'enterprise_viewer'
+export type UserRole = 'epc' | 'owner' | 'subcontractor' | 'auditor'
 
-export interface RoleConfig {
-  id: UserRole
-  label: string
-  shortLabel: string
+export interface RolePermissions {
+  canUploadSchedule: boolean
+  canApproveVerification: boolean
+  canUploadEvidence: boolean
+  canEditMaterials: boolean
+  canSignOffMilestones: boolean
+  canCreateProject: boolean
+  roleLabel: string
+  roleDescription: string
   badgeColor: string
-  description: string
 }
 
-export const ROLES: Record<UserRole, RoleConfig> = {
-  project_manager: {
-    id: 'project_manager',
-    label: 'Project Manager',
-    shortLabel: 'PM',
-    badgeColor: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
-    description: 'Executive view — Overall progress, variance, risks, and human verification',
+export const ROLE_DEFINITIONS: Record<UserRole, RolePermissions> = {
+  epc: {
+    canUploadSchedule: true,
+    canApproveVerification: true,
+    canUploadEvidence: true,
+    canEditMaterials: true,
+    canSignOffMilestones: false,
+    canCreateProject: true,
+    roleLabel: 'EPC General Contractor',
+    roleDescription: 'Full operations, schedule management, contractor oversight & field verification',
+    badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
   },
-  site_engineer: {
-    id: 'site_engineer',
-    label: 'Site Engineer',
-    shortLabel: 'Site',
-    badgeColor: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    description: 'Field operations — Field updates, daily logs, evidence upload, safety risks',
+  owner: {
+    canUploadSchedule: false,
+    canApproveVerification: true,
+    canUploadEvidence: true,
+    canEditMaterials: false,
+    canSignOffMilestones: true,
+    canCreateProject: true,
+    roleLabel: 'Project Owner / Client',
+    roleDescription: 'Executive oversight, EVM S-Curve controls & final milestone sign-off',
+    badgeColor: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
   },
-  planning_engineer: {
-    id: 'planning_engineer',
-    label: 'Planning Engineer',
-    shortLabel: 'Planning',
-    badgeColor: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-    description: 'Schedule management — WBS L1-L6, baseline tracking, semantic matching',
+  subcontractor: {
+    canUploadSchedule: false,
+    canApproveVerification: false,
+    canUploadEvidence: true,
+    canEditMaterials: true,
+    canSignOffMilestones: false,
+    canCreateProject: false,
+    roleLabel: 'Subcontractor / Trade Lead',
+    roleDescription: 'Site execution, live field updates & material delivery logs',
+    badgeColor: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
   },
-  project_controls: {
-    id: 'project_controls',
-    label: 'Project Controls',
-    shortLabel: 'Controls',
-    badgeColor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-    description: 'Controls & Audit — Consistency analysis, conflict tracking, audit trails',
-  },
-  enterprise_viewer: {
-    id: 'enterprise_viewer',
-    label: 'Enterprise Management',
-    shortLabel: 'Viewer',
-    badgeColor: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-    description: 'Executive dashboard — Read-only project health, KPI summaries, and reports',
+  auditor: {
+    canUploadSchedule: false,
+    canApproveVerification: true,
+    canUploadEvidence: true,
+    canEditMaterials: false,
+    canSignOffMilestones: true,
+    canCreateProject: false,
+    roleLabel: 'Quality & Safety Auditor',
+    roleDescription: 'Independent inspection, tamper-proof evidence verification & dispute escalation',
+    badgeColor: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30',
   },
 }
 
-interface RoleContextType {
+export const ROLES: Record<UserRole, { id: UserRole; label: string; description: string; badge: string; color: string; badgeColor: string }> = {
+  epc: {
+    id: 'epc',
+    label: 'EPC General Contractor',
+    description: 'Full operations, schedule management, contractor oversight & field verification',
+    badge: 'EPC Lead',
+    color: 'emerald',
+    badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+  },
+  owner: {
+    id: 'owner',
+    label: 'Project Owner / Client',
+    description: 'Executive oversight, EVM S-Curve controls & final milestone sign-off',
+    badge: 'Owner/Client',
+    color: 'indigo',
+    badgeColor: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
+  },
+  subcontractor: {
+    id: 'subcontractor',
+    label: 'Subcontractor / Trade Lead',
+    description: 'Site execution, live field updates & material delivery logs',
+    badge: 'Trade Lead',
+    color: 'amber',
+    badgeColor: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+  },
+  auditor: {
+    id: 'auditor',
+    label: 'Quality & Safety Auditor',
+    description: 'Independent inspection, tamper-proof evidence verification & dispute escalation',
+    badge: 'Auditor',
+    color: 'purple',
+    badgeColor: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30',
+  },
+}
+
+export interface RoleContextType {
   role: UserRole
-  roleConfig: RoleConfig
+  roleConfig: typeof ROLES[UserRole]
   setRole: (role: UserRole) => void
+  permissions: RolePermissions
+  canVerify: boolean
+  canEdit: boolean
+  canView: boolean
 }
 
-const RoleContext = createContext<RoleContextType>({
-  role: 'project_manager',
-  roleConfig: ROLES.project_manager,
-  setRole: () => {},
-})
+const RoleContext = createContext<RoleContextType | undefined>(undefined)
 
-export const RoleProvider = ({ children }: { children: ReactNode }) => {
+export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [role, setRoleState] = useState<UserRole>(() => {
-    const saved = localStorage.getItem('progressiq_role') as UserRole
-    return (saved && ROLES[saved]) ? saved : 'project_manager'
+    const saved = localStorage.getItem('progressiq_active_role')
+    return (saved as UserRole) || 'epc'
   })
-
-  useEffect(() => {
-    localStorage.setItem('progressiq_role', role)
-  }, [role])
 
   const setRole = (newRole: UserRole) => {
     setRoleState(newRole)
+    localStorage.setItem('progressiq_active_role', newRole)
   }
 
+  const permissions = ROLE_DEFINITIONS[role] || ROLE_DEFINITIONS.epc
+  const roleConfig = ROLES[role] || ROLES.epc
+
   return (
-    <RoleContext.Provider value={{ role, roleConfig: ROLES[role], setRole }}>
+    <RoleContext.Provider
+      value={{
+        role,
+        roleConfig,
+        setRole,
+        permissions,
+        canVerify: permissions.canApproveVerification,
+        canEdit: permissions.canUploadSchedule || permissions.canEditMaterials,
+        canView: true,
+      }}
+    >
       {children}
     </RoleContext.Provider>
   )
 }
 
-export const useRole = () => useContext(RoleContext)
+export const useRole = () => {
+  const context = useContext(RoleContext)
+  if (!context) {
+    throw new Error('useRole must be used within a RoleProvider')
+  }
+  return context
+}

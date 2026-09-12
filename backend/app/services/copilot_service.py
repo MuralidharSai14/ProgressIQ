@@ -65,10 +65,10 @@ async def aggregate_project_context(db: AsyncSession, project_id: int) -> Dict[s
         "project": {
             "id": project.id,
             "name": project.name,
-            "code": project.code,
+            "location": project.location or "Site",
             "status": project.status,
             "planned_start": project.planned_start.strftime("%Y-%m-%d") if project.planned_start else None,
-            "planned_finish": project.planned_finish.strftime("%Y-%m-%d") if project.planned_finish else None,
+            "planned_finish": project.planned_end.strftime("%Y-%m-%d") if project.planned_end else None,
         },
         "evm_metrics": {
             "spi": evm.get("spi", 1.0),
@@ -82,7 +82,7 @@ async def aggregate_project_context(db: AsyncSession, project_id: int) -> Dict[s
         "critical_delays": [
             {
                 "activity_id": a.activity_id,
-                "name": a.name,
+                "name": a.activity_name,
                 "planned_progress": a.planned_progress,
                 "actual_progress": a.actual_progress,
                 "status": a.status,

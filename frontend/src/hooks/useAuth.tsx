@@ -1,19 +1,18 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import apiService from '../services/api'
-import { type UserRole } from './useRole'
 
 export interface UserProfile {
   id: number
   email: string
   full_name: string
-  role: UserRole
+  role: string
   organization?: string
   is_active: boolean
 }
 
 export interface TestAccount {
   email: string
-  role: UserRole
+  role: string
   name: string
   description: string
   password: string

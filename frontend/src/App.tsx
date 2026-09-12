@@ -18,6 +18,8 @@ import Header from './components/layout/Header'
 import GlobalSearchModal from './components/layout/GlobalSearchModal'
 import NotificationsDrawer from './components/layout/NotificationsDrawer'
 import LiveFieldUpdateModal from './components/LiveFieldUpdateModal'
+import { CopilotDrawer } from './components/CopilotDrawer'
+import { Sparkles } from 'lucide-react'
 
 import OverviewPage from './pages/OverviewPage'
 import ProjectsPage from './pages/ProjectsPage'
@@ -49,6 +51,7 @@ function AppShell() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isLiveUpdateOpen, setIsLiveUpdateOpen] = useState(false)
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false)
 
   // Real-time SSE synchronization across connected devices
   useRealtimeSync(projectId, (event) => {
@@ -92,6 +95,7 @@ function AppShell() {
           onOpenNotifications={() => setIsNotificationsOpen(true)}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
           onOpenLiveUpdate={() => setIsLiveUpdateOpen(true)}
+          onOpenCopilot={() => setIsCopilotOpen(true)}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
@@ -121,6 +125,16 @@ function AppShell() {
         </main>
       </div>
 
+      {/* Persistent Floating AI Copilot Trigger */}
+      <button
+        onClick={() => setIsCopilotOpen(true)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-bold text-xs shadow-xl hover:shadow-2xl hover:scale-105 transition-all cursor-pointer border border-white/20 backdrop-blur-md"
+        title="Open PROGRESSIQ AI Project Copilot"
+      >
+        <Sparkles className="w-4 h-4 animate-spin [animation-duration:4s]" />
+        <span>Ask AI Copilot</span>
+      </button>
+
       {/* Global Modals & Drawers */}
       <GlobalSearchModal
         isOpen={isSearchOpen}
@@ -135,9 +149,13 @@ function AppShell() {
       <LiveFieldUpdateModal
         isOpen={isLiveUpdateOpen}
         onClose={() => setIsLiveUpdateOpen(false)}
-        onSuccess={() => {
-          // Dashboard or page will auto-receive SSE/refresh
-        }}
+        onSuccess={() => {}}
+      />
+
+      <CopilotDrawer
+        projectId={projectId || 1}
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
       />
     </div>
   )

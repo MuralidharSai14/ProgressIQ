@@ -16,6 +16,8 @@ import apiService from '../services/api'
 import { useProject } from '../hooks/useProject'
 import { useTheme } from '../hooks/useTheme'
 import { useToast } from '../hooks/useToast'
+import { useRole } from '../hooks/useRole'
+import { GeotagBadge } from '../components/GeotagBadge'
 import {
   PageHeader, LoadingSpinner, EmptyState, WarningBox,
   PriorityBadge, ConfidenceBadge, TripleProgressBar, EvidenceBadge,
@@ -27,6 +29,7 @@ export default function VerificationPage() {
   const { projectId } = useProject()
   const { theme } = useTheme()
   const { success, error } = useToast()
+  const { role, permissions } = useRole()
   const isDark = theme === 'dark'
 
   const [tasks, setTasks] = useState<any[]>([])
@@ -383,7 +386,7 @@ export default function VerificationPage() {
                         <div
                           key={ev.id}
                           className={clsx(
-                            "p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-all cursor-pointer hover:border-blue-500/50",
+                            "p-2.5 rounded-lg border flex flex-col justify-between gap-1.5 transition-all cursor-pointer hover:border-blue-500/50",
                             isDark ? "bg-slate-900/80 border-slate-800" : "bg-white border-slate-200 shadow-xs"
                           )}
                           onClick={() => setPreviewItem({
@@ -392,14 +395,27 @@ export default function VerificationPage() {
                             url: ev.evidence_type === 'photo' ? undefined : undefined,
                           })}
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <EvidenceBadge type={ev.evidence_type} />
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-200 text-xs truncate">{ev.filename}</p>
-                              {ev.location && <p className="text-[10px] text-slate-400 truncate">📍 {ev.location}</p>}
+                          <div className="flex items-center justify-between gap-2 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <EvidenceBadge type={ev.evidence_type} />
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-200 text-xs truncate">{ev.filename}</p>
+                                {ev.location && <p className="text-[10px] text-slate-400 truncate">📍 {ev.location}</p>}
+                              </div>
                             </div>
+                            <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           </div>
-                          <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          {(ev.latitude || ev.sha256 || ev.sha256_hash) && (
+                            <div className="pt-1 border-t border-slate-800/60" onClick={e => e.stopPropagation()}>
+                              <GeotagBadge data={{
+                                latitude: ev.latitude,
+                                longitude: ev.longitude,
+                                sha256_hash: ev.sha256 || ev.sha256_hash,
+                                has_gps: !!(ev.latitude && ev.longitude),
+                                verified: !!(ev.sha256 || ev.sha256_hash),
+                              }} />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -444,14 +460,16 @@ export default function VerificationPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => handleDecision(t.id, 'confirmed')}
-                      disabled={isDeciding}
+                      disabled={isDeciding || !permissions.canApproveVerification}
+                      title={!permissions.canApproveVerification ? `Current persona (${role}) is read-only` : undefined}
                       className={btnSuccess}
                     >
                       <CheckCircle className="w-3.5 h-3.5" /> Confirm Progress
                     </button>
                     <button
                       onClick={() => handleDecision(t.id, 'rejected')}
-                      disabled={isDeciding}
+                      disabled={isDeciding || !permissions.canApproveVerification}
+                      title={!permissions.canApproveVerification ? `Current persona (${role}) is read-only` : undefined}
                       className={btnDanger}
                     >
                       <XCircle className="w-3.5 h-3.5" /> Reject Claim

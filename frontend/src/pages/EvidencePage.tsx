@@ -18,6 +18,7 @@ import {
   EvidenceBadge, DemoLabel, Modal,
   btnPrimary, btnSecondary, inputField, selectField
 } from '../components/ui'
+import { GeotagBadge } from '../components/GeotagBadge'
 
 export default function EvidencePage() {
   const { projectId } = useProject()
@@ -413,6 +414,21 @@ export default function EvidencePage() {
                     )}
                     {ev.equipment_name && <span>🚚 Carrier/Truck: {ev.equipment_name}</span>}
                   </div>
+
+                  {/* GPS Coordinates & SHA-256 Tamper-Proof Cryptographic Badges */}
+                  <GeotagBadge
+                    data={
+                      typeof ev.ai_analysis === 'object'
+                        ? ev.ai_analysis?.tamper_proof
+                        : (() => {
+                            try {
+                              return JSON.parse(ev.ai_analysis)?.tamper_proof
+                            } catch {
+                              return null
+                            }
+                          })()
+                    }
+                  />
 
                   {/* AI Evidence Interpretation */}
                   {ev.ai_analysis && (

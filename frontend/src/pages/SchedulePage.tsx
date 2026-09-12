@@ -427,15 +427,15 @@ export default function SchedulePage() {
           >
             <FileSpreadsheet className="w-10 h-10 text-blue-400 mx-auto mb-2" />
             <p className="font-bold text-sm text-slate-200">
-              {selectedFile ? selectedFile.name : 'Choose CSV or Excel Schedule File'}
+              {selectedFile ? selectedFile.name : 'Choose Primavera P6 (.xer, .xml), CSV, or Excel Schedule'}
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
-              Supports .csv, .xlsx, .xls formats (Up to 20MB)
+              Supports Primavera P6 (.xer, .xml), Excel (.xlsx, .xls), CSV & JSON (Up to 50MB)
             </p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".xer,.xml,.csv,.xlsx,.xls,.json"
               onChange={e => setSelectedFile(e.target.files?.[0] || null)}
               className="hidden"
             />

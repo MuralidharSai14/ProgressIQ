@@ -18,7 +18,8 @@ import { useAuth, TEST_ACCOUNTS } from '../../hooks/useAuth'
 import { useToast } from '../../hooks/useToast'
 import apiService from '../../services/api'
 import { Modal, btnPrimary, btnSecondary, inputField } from '../ui'
-import { Smartphone, LogIn, LogOut } from 'lucide-react'
+import { Smartphone, LogIn, LogOut, Sparkles } from 'lucide-react'
+import { OfflineBadge } from '../OfflineBadge'
 
 const PAGE_NAMES: Record<string, string> = {
   '/': 'Overview & Executive KPIs',
@@ -46,11 +47,13 @@ export default function Header({
   onOpenNotifications,
   onToggleMobileSidebar,
   onOpenLiveUpdate,
+  onOpenCopilot,
 }: {
   onOpenSearch: () => void
   onOpenNotifications: () => void
   onToggleMobileSidebar: () => void
   onOpenLiveUpdate?: () => void
+  onOpenCopilot?: () => void
 }) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -387,6 +390,21 @@ export default function Header({
               </div>
             )}
           </div>
+
+          {/* Live Network & Offline Status Indicator */}
+          <OfflineBadge />
+
+          {/* AI Project Copilot Header Trigger */}
+          {onOpenCopilot && (
+            <button
+              onClick={onOpenCopilot}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white font-bold text-xs shadow-xs transition-all cursor-pointer shrink-0"
+              title="Open AI Project Copilot"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">AI Copilot</span>
+            </button>
+          )}
 
           {/* + Live Field Update Quick Action Button */}
           {onOpenLiveUpdate && (

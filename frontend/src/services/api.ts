@@ -186,6 +186,18 @@ export const apiService = {
     api.get(`/projects/${projectId}/safety-summary`).then(r => r.data),
   getActivitySafetyRisks: (activityId: number) =>
     api.get(`/activities/${activityId}/safety-risks`).then(r => r.data),
+
+  // EVM & S-Curve Forecasting
+  getProjectEVM: (projectId: number) =>
+    api.get(`/projects/${projectId}/evm`).then(r => r.data),
+  getProjectSCurve: (projectId: number, intervals = 12) =>
+    api.get(`/projects/${projectId}/s-curve`, { params: { intervals } }).then(r => r.data),
+
+  // AI Project Copilot
+  askCopilot: (projectId: number, query: string) =>
+    api.post(`/projects/${projectId}/copilot/ask`, { query }).then(r => r.data),
+  getCopilotPrompts: (projectId: number) =>
+    api.get(`/projects/${projectId}/copilot/suggested-prompts`).then(r => r.data),
 }
 
 export default apiService
