@@ -28,21 +28,42 @@ DEFAULT_TEST_USERS = [
     {
         "email": "pm@progressiq.ai",
         "password": "pm123",
-        "full_name": "Rajesh Sharma (Project Manager)",
+        "full_name": "Rajesh Sharma",
         "role": UserRole.PROJECT_MANAGER.value,
         "organization": "Indravati River Bridge JV",
     },
     {
         "email": "engineer@progressiq.ai",
         "password": "engineer123",
-        "full_name": "Amit Kumar (Site Engineer)",
+        "full_name": "Amit Kumar",
         "role": UserRole.SITE_ENGINEER.value,
         "organization": "Indravati River Bridge JV",
     },
     {
+        "email": "site@progressiq.ai",
+        "password": "site123",
+        "full_name": "Suresh Babu",
+        "role": UserRole.SITE_ENGINEER.value,
+        "organization": "Indravati River Bridge JV",
+    },
+    {
+        "email": "owner@progressiq.ai",
+        "password": "owner123",
+        "full_name": "Vikram Nair",
+        "role": UserRole.PROJECT_MANAGER.value,
+        "organization": "Ministry of Transport",
+    },
+    {
+        "email": "auditor@progressiq.ai",
+        "password": "audit123",
+        "full_name": "Priya Patel",
+        "role": UserRole.VIEWER.value,
+        "organization": "Quality Assurance Board",
+    },
+    {
         "email": "viewer@progressiq.ai",
         "password": "viewer123",
-        "full_name": "Priya Patel (Enterprise Auditor)",
+        "full_name": "Deepa Reddy",
         "role": UserRole.VIEWER.value,
         "organization": "Ministry of Transport",
     },
@@ -111,6 +132,9 @@ async def register_user(data: UserRegister, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login_user(data: UserLogin, db: AsyncSession = Depends(get_db)):
     """Log in with email and password to receive JWT token."""
+    # Always ensure seed users exist (handles Vercel /tmp resets on cold start)
+    await seed_default_users(db)
+
     email_clean = data.email.strip().lower()
     res = await db.execute(select(User).where(User.email == email_clean))
     user = res.scalar_one_or_none()
