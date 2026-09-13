@@ -1,9 +1,8 @@
 /**
  * PROGRESSIQ — Root Application Component
- * Sets up global providers (Theme, Project, Role, Toast), layout shell (Sidebar, Header, Command Search, Notifications Drawer), and routing.
  */
 import { useState, useEffect } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import clsx from 'clsx'
 
 import { ProjectProvider, useProject } from './hooks/useProject'
@@ -41,20 +40,12 @@ import AuditPage from './pages/AuditPage'
 import MaterialLogisticsPage from './pages/MaterialLogisticsPage'
 import WorkerSafetyPage from './pages/WorkerSafetyPage'
 
+// ── Full app shell (authenticated) ───────────────────────────────────────────
 function AppShell() {
   const { theme } = useTheme()
   const { projectId } = useProject()
   const { info } = useToast()
-  const { isAuthenticated, loading: authLoading } = useAuth()
-  const navigate = useNavigate()
   const isDark = theme === 'dark'
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      navigate('/login', { replace: true })
-    }
-  }, [isAuthenticated, authLoading, navigate])
 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
@@ -62,7 +53,6 @@ function AppShell() {
   const [isLiveUpdateOpen, setIsLiveUpdateOpen] = useState(false)
   const [isCopilotOpen, setIsCopilotOpen] = useState(false)
 
-  // Real-time SSE synchronization across connected devices
   useRealtimeSync(projectId, (event) => {
     if (event.event === 'live_field_update_processed') {
       info(`📱 Live field update received: ${event.data.activity_name} (${event.data.progress}%) by ${event.data.reporter}`)
@@ -73,7 +63,6 @@ function AppShell() {
     }
   })
 
-  // Global keyboard shortcut for Search (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -90,14 +79,11 @@ function AppShell() {
       "flex min-h-screen transition-colors duration-150 font-sans",
       isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
     )}>
-      {/* Sidebar Navigation */}
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onOpenLiveUpdate={() => setIsLiveUpdateOpen(true)}
       />
-
-      {/* Main Content Area with Fixed Top Header */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <Header
           onOpenSearch={() => setIsSearchOpen(true)}
@@ -106,7 +92,6 @@ function AppShell() {
           onOpenLiveUpdate={() => setIsLiveUpdateOpen(true)}
           onOpenCopilot={() => setIsCopilotOpen(true)}
         />
-
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
             <Routes>
@@ -128,12 +113,12 @@ function AppShell() {
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/activity/:activityId" element={<ActivityDetailPage />} />
+              <Route path="*" element={<OverviewPage onOpenLiveUpdate={() => setIsLiveUpdateOpen(true)} />} />
             </Routes>
           </div>
         </main>
       </div>
 
-      {/* Persistent Floating AI Copilot Trigger */}
       <button
         onClick={() => setIsCopilotOpen(true)}
         className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-bold text-xs shadow-xl hover:shadow-2xl hover:scale-105 transition-all cursor-pointer border border-white/20 backdrop-blur-md"
@@ -143,32 +128,58 @@ function AppShell() {
         <span>Ask AI Copilot</span>
       </button>
 
-      {/* Global Modals & Drawers */}
-      <GlobalSearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-      />
-
-      <NotificationsDrawer
-        isOpen={isNotificationsOpen}
-        onClose={() => setIsNotificationsOpen(false)}
-      />
-
-      <LiveFieldUpdateModal
-        isOpen={isLiveUpdateOpen}
-        onClose={() => setIsLiveUpdateOpen(false)}
-        onSuccess={() => {}}
-      />
-
-      <CopilotDrawer
-        projectId={projectId || 1}
-        isOpen={isCopilotOpen}
-        onClose={() => setIsCopilotOpen(false)}
-      />
+      <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      <NotificationsDrawer isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
+      <LiveFieldUpdateModal isOpen={isLiveUpdateOpen} onClose={() => setIsLiveUpdateOpen(false)} onSuccess={() => {}} />
+      <CopilotDrawer projectId={projectId || 1} isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
     </div>
   )
 }
 
+// ── Login screen ─────────────────────────────────────────────────────────────
+function LoginScreen() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+  return (
+    <div className={clsx(
+      "min-h-screen flex items-center justify-center p-4",
+      isDark ? "bg-slate-950 text-slate-100" : "bg-slate-100 text-slate-900"
+    )}>
+      <LoginPage />
+    </div>
+  )
+}
+
+// ── Root — decides login vs app based on auth state ──────────────────────────
+function Root() {
+  const { isAuthenticated, loading } = useAuth()
+
+  // Loading state — show spinner while checking saved token
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-400 text-sm font-medium">Loading PROGRESSIQ...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Not authenticated → show login
+  if (!isAuthenticated) {
+    return <LoginScreen />
+  }
+
+  // Authenticated → show full app with routing
+  return (
+    <Routes>
+      <Route path="/*" element={<AppShell />} />
+    </Routes>
+  )
+}
+
+// ── App entry ────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <ThemeProvider>
@@ -176,17 +187,7 @@ export default function App() {
         <ProjectProvider>
           <RoleProvider>
             <ToastProvider>
-              <Routes>
-                <Route
-                  path="/login"
-                  element={
-                    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
-                      <LoginPage />
-                    </div>
-                  }
-                />
-                <Route path="/*" element={<AppShell />} />
-              </Routes>
+              <Root />
             </ToastProvider>
           </RoleProvider>
         </ProjectProvider>

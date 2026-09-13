@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight, Sparkles, RefreshCw, KeyRound
@@ -12,17 +12,10 @@ import { inputField, selectField, btnPrimary } from '../components/ui'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { login, register, quickLoginAs, isAuthenticated, loading: authLoading } = useAuth()
+  const { login, register, quickLoginAs } = useAuth()
   const { theme } = useTheme()
   const { success, error } = useToast()
   const isDark = theme === 'dark'
-
-  // If already logged in, go straight to dashboard
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      navigate('/', { replace: true })
-    }
-  }, [isAuthenticated, authLoading, navigate])
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
