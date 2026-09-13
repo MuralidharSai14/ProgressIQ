@@ -3,7 +3,7 @@
  * Sets up global providers (Theme, Project, Role, Toast), layout shell (Sidebar, Header, Command Search, Notifications Drawer), and routing.
  */
 import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 
 import { ProjectProvider, useProject } from './hooks/useProject'
