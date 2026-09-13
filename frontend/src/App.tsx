@@ -3,14 +3,14 @@
  * Sets up global providers (Theme, Project, Role, Toast), layout shell (Sidebar, Header, Command Search, Notifications Drawer), and routing.
  */
 import { useState, useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 
 import { ProjectProvider, useProject } from './hooks/useProject'
 import { ThemeProvider, useTheme } from './hooks/useTheme'
 import { RoleProvider } from './hooks/useRole'
 import { ToastProvider, useToast } from './hooks/useToast'
-import { AuthProvider } from './hooks/useAuth'
+import { AuthProvider, useAuth } from './hooks/useAuth'
 import { useRealtimeSync } from './hooks/useRealtimeSync'
 
 import Sidebar from './components/Sidebar'
@@ -45,7 +45,16 @@ function AppShell() {
   const { theme } = useTheme()
   const { projectId } = useProject()
   const { info } = useToast()
+  const { isAuthenticated, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
   const isDark = theme === 'dark'
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login', { replace: true })
+    }
+  }, [isAuthenticated, authLoading, navigate])
 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
@@ -102,7 +111,6 @@ function AppShell() {
           <div className="max-w-7xl mx-auto space-y-6">
             <Routes>
               <Route path="/" element={<OverviewPage onOpenLiveUpdate={() => setIsLiveUpdateOpen(true)} />} />
-              <Route path="/login" element={<LoginPage />} />
               <Route path="/field-update" element={<FieldUpdatePage />} />
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
@@ -168,7 +176,17 @@ export default function App() {
         <ProjectProvider>
           <RoleProvider>
             <ToastProvider>
-              <AppShell />
+              <Routes>
+                <Route
+                  path="/login"
+                  element={
+                    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+                      <LoginPage />
+                    </div>
+                  }
+                />
+                <Route path="/*" element={<AppShell />} />
+              </Routes>
             </ToastProvider>
           </RoleProvider>
         </ProjectProvider>
