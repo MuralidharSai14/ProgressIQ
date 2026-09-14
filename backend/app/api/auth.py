@@ -132,8 +132,13 @@ async def register_user(data: UserRegister, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login_user(data: UserLogin, db: AsyncSession = Depends(get_db)):
     """Log in with email and password to receive JWT token."""
-    # Always ensure seed users exist (handles Vercel /tmp resets on cold start)
+    # Always ensure seed users & demo projects exist (handles Vercel /tmp resets on cold start)
     await seed_default_users(db)
+    try:
+        from app.services.demo_loader import ensure_all_demo_projects_seeded
+        await ensure_all_demo_projects_seeded(db)
+    except Exception as e:
+        logger.warning(f"Demo project auto-seed notice: {e}")
 
     email_clean = data.email.strip().lower()
     res = await db.execute(select(User).where(User.email == email_clean))

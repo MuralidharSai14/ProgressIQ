@@ -1,4 +1,4 @@
-﻿"""Dashboard summary and risk endpoints."""
+"""Dashboard summary and risk endpoints."""
 from collections import Counter
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +25,16 @@ async def get_dashboard(project_id: int, db: AsyncSession = Depends(get_db)):
     proj_result = await db.execute(select(Project).where(Project.id == project_id))
     project = proj_result.scalar_one_or_none()
     if not project:
+        try:
+            from app.services.demo_loader import ensure_all_demo_projects_seeded
+            await ensure_all_demo_projects_seeded(db)
+            proj_result = await db.execute(select(Project).where(Project.id == project_id))
+            project = proj_result.scalar_one_or_none()
+        except Exception:
+            pass
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
 
     # Fetch all activities
     act_result = await db.execute(
