@@ -285,8 +285,14 @@ async def load_demo_project(db: AsyncSession, template_type: str = "infrastructu
     logger.info(f"🚀 Loading demo project (template: {template_type})...")
     template_info = TEMPLATE_CONFIGS.get(template_type, TEMPLATE_CONFIGS["infrastructure"])
 
-    # ── Step 1: Delete existing demo project ─────────────────────────────────
-    existing = await db.execute(select(Project).where(Project.is_demo == True))
+    # ── Step 1: Delete ONLY the existing project for THIS template ───────────
+    # This lets all 3 templates (infrastructure, construction, energy) coexist
+    existing = await db.execute(
+        select(Project).where(
+            Project.is_demo == True,
+            Project.name == template_info["name"]
+        )
+    )
     for proj in existing.scalars().all():
         await db.execute(delete(AuditEvent).where(AuditEvent.project_id == proj.id))
         await db.execute(delete(VerificationTask).where(VerificationTask.project_id == proj.id))
