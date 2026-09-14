@@ -21,7 +21,7 @@ export interface TestAccount {
 export const TEST_ACCOUNTS: TestAccount[] = [
   {
     email: 'admin@progressiq.ai',
-    role: 'project_manager', // mapped admin level
+    role: 'project_manager',
     name: 'Executive Administrator',
     description: 'Full administrative access across all projects, users, schedules & audits',
     password: 'admin123',
@@ -49,6 +49,27 @@ export const TEST_ACCOUNTS: TestAccount[] = [
   },
 ]
 
+// ── Safe JSON parse — never crashes ──────────────────────────────────────────
+function safeParse<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
+// ── Safe localStorage — never crashes ────────────────────────────────────────
+function safeGetItem(key: string): string | null {
+  try { return localStorage.getItem(key) } catch { return null }
+}
+function safeSetItem(key: string, value: string): void {
+  try { localStorage.setItem(key, value) } catch { /* ignore */ }
+}
+function safeRemoveItem(key: string): void {
+  try { localStorage.removeItem(key) } catch { /* ignore */ }
+}
+
 interface AuthContextType {
   user: UserProfile | null
   token: string | null
@@ -72,26 +93,29 @@ const AuthContext = createContext<AuthContextType>({
 })
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('progressiq_token'))
-  const [user, setUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('progressiq_user')
-    return saved ? JSON.parse(saved) : null
-  })
+  const [token, setToken] = useState<string | null>(() => safeGetItem('progressiq_token'))
+  const [user, setUser] = useState<UserProfile | null>(() =>
+    safeParse<UserProfile>(safeGetItem('progressiq_user'))
+  )
   const [loading, setLoading] = useState(true)
 
-  // Verify / refresh user session on startup
+  // Verify session on startup — if token exists, validate it
   useEffect(() => {
     const initAuth = async () => {
-      const savedToken = localStorage.getItem('progressiq_token')
+      const savedToken = safeGetItem('progressiq_token')
       if (savedToken) {
         try {
           const me = await apiService.getMe()
-          setUser(me)
-          localStorage.setItem('progressiq_user', JSON.stringify(me))
+          if (me && me.id) {
+            setUser(me)
+            safeSetItem('progressiq_user', JSON.stringify(me))
+          } else {
+            throw new Error('Invalid user response')
+          }
         } catch {
-          // If token expired, clear
-          localStorage.removeItem('progressiq_token')
-          localStorage.removeItem('progressiq_user')
+          // Token expired or invalid — clear everything
+          safeRemoveItem('progressiq_token')
+          safeRemoveItem('progressiq_user')
           setToken(null)
           setUser(null)
         }
@@ -104,45 +128,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string): Promise<UserProfile> => {
     const res = await apiService.login({ email, password })
     if (!res || !res.access_token || !res.user) {
-      throw new Error((res as any)?.detail || (res as any)?.error || (res as any)?.message || 'Authentication failed. Please verify server connection.')
+      throw new Error((res as any)?.detail || (res as any)?.error || 'Authentication failed.')
     }
     const { access_token, user: loggedUser } = res
     setToken(access_token)
     setUser(loggedUser)
-    localStorage.setItem('progressiq_token', access_token)
-    localStorage.setItem('progressiq_user', JSON.stringify(loggedUser))
-    if (loggedUser?.role) {
-      localStorage.setItem('progressiq_role', loggedUser.role)
-    }
+    safeSetItem('progressiq_token', access_token)
+    safeSetItem('progressiq_user', JSON.stringify(loggedUser))
+    if (loggedUser?.role) safeSetItem('progressiq_role', loggedUser.role)
     return loggedUser
   }
 
-  const register = async (data: { email: string; password: string; full_name: string; role?: string; organization?: string }): Promise<UserProfile> => {
+  const register = async (data: {
+    email: string; password: string; full_name: string; role?: string; organization?: string
+  }): Promise<UserProfile> => {
     const res = await apiService.register(data)
     if (!res || !res.access_token || !res.user) {
-      throw new Error((res as any)?.detail || (res as any)?.error || (res as any)?.message || 'Registration failed.')
+      throw new Error((res as any)?.detail || (res as any)?.error || 'Registration failed.')
     }
     const { access_token, user: newUser } = res
     setToken(access_token)
     setUser(newUser)
-    localStorage.setItem('progressiq_token', access_token)
-    localStorage.setItem('progressiq_user', JSON.stringify(newUser))
-    if (newUser?.role) {
-      localStorage.setItem('progressiq_role', newUser.role)
-    }
+    safeSetItem('progressiq_token', access_token)
+    safeSetItem('progressiq_user', JSON.stringify(newUser))
+    if (newUser?.role) safeSetItem('progressiq_role', newUser.role)
     return newUser
   }
 
   const logout = () => {
     setToken(null)
     setUser(null)
-    localStorage.removeItem('progressiq_token')
-    localStorage.removeItem('progressiq_user')
+    safeRemoveItem('progressiq_token')
+    safeRemoveItem('progressiq_user')
+    safeRemoveItem('progressiq_role')
   }
 
-  const quickLoginAs = async (email: string, password: string): Promise<UserProfile> => {
-    return login(email, password)
-  }
+  const quickLoginAs = async (email: string, password: string): Promise<UserProfile> =>
+    login(email, password)
 
   return (
     <AuthContext.Provider value={{
