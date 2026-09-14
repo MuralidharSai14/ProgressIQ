@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database.connection import get_db
+from app.models.models import Project, ScheduleActivity
 from app.schemas.schemas import ScheduleActivityOut, ScheduleUploadSummary
 from app.processors.schedule import parse_schedule_file
 from app.processors.document import sanitize_filename
