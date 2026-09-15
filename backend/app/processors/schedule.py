@@ -3,7 +3,12 @@ PROGRESSIQ — Schedule Processor
 Parses Excel (.xlsx, .xls), CSV, and JSON files into normalized ScheduleActivity dictionaries.
 Provides comprehensive row-by-row validation and detailed import diagnostics without silently discarding rows.
 """
-import pandas as pd
+try:
+    import pandas as pd
+    _pandas_available = True
+except ImportError:
+    pd = None
+    _pandas_available = False
 import json
 import io
 import logging
@@ -28,7 +33,7 @@ COLUMN_ALIASES = {
 }
 
 
-def _resolve_column(df: pd.DataFrame, canonical: str) -> Optional[str]:
+def _resolve_column(df, canonical: str) -> Optional[str]:
     """Find which column in the dataframe matches a canonical name."""
     aliases = COLUMN_ALIASES.get(canonical, [canonical])
     df_lower = {str(c).lower().strip(): c for c in df.columns}
@@ -38,14 +43,30 @@ def _resolve_column(df: pd.DataFrame, canonical: str) -> Optional[str]:
     return None
 
 
+def _is_na(val) -> bool:
+    """Safe pd.isna replacement that works without pandas."""
+    if val is None:
+        return True
+    if _pandas_available and pd is not None:
+        try:
+            return bool(pd.isna(val))
+        except Exception:
+            pass
+    return str(val).strip().lower() in ("", "nan", "nat", "none")
+
+
 def _parse_date(val) -> Optional[datetime]:
     """Try to parse a date value (handles strings, datetime, None)."""
-    if pd.isna(val) or val is None or str(val).strip() in ("", "nan", "NaT"):
+    if _is_na(val) or val is None or str(val).strip() in ("", "nan", "NaT"):
         return None
     if isinstance(val, datetime):
         return val
-    if isinstance(val, pd.Timestamp):
-        return val.to_pydatetime()
+    if _pandas_available and pd is not None:
+        try:
+            if isinstance(val, pd.Timestamp):
+                return val.to_pydatetime()
+        except Exception:
+            pass
     for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%b-%Y", "%d %b %Y", "%Y/%m/%d"):
         try:
             return datetime.strptime(str(val).strip(), fmt)
@@ -56,7 +77,7 @@ def _parse_date(val) -> Optional[datetime]:
 
 def _parse_progress(val) -> float:
     """Parse a progress value to a 0–100 float."""
-    if pd.isna(val) or val is None:
+    if _is_na(val) or val is None:
         return 0.0
     try:
         v = float(str(val).replace("%", "").strip())
@@ -73,7 +94,7 @@ def _parse_progress(val) -> float:
 
 def _parse_bool(val) -> bool:
     """Parse milestone/boolean field."""
-    if pd.isna(val) or val is None:
+    if _is_na(val) or val is None:
         return False
     return str(val).lower().strip() in ("yes", "true", "1", "y", "milestone", "m")
 

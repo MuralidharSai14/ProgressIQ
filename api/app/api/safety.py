@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database.connection import get_db
+from app.utils.auth_deps import get_project_or_404
 from app.models.models import WorkerSafetyRisk, Project, ScheduleActivity
 from app.schemas.schemas import (
     WorkerSafetyRiskCreate,
@@ -30,9 +31,7 @@ async def list_safety_risks(
     db: AsyncSession = Depends(get_db),
 ):
     """List all worker safety risks for a project with optional filters."""
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     query = select(WorkerSafetyRisk).where(WorkerSafetyRisk.project_id == project_id)
     if risk_score:
@@ -79,9 +78,7 @@ async def create_safety_risk(
     db: AsyncSession = Depends(get_db),
 ):
     """Add a new worker safety risk entry for a project."""
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     if data.activity_id:
         act = await db.execute(
@@ -157,9 +154,7 @@ async def delete_safety_risk(risk_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/projects/{project_id}/safety-summary", response_model=dict)
 async def get_safety_summary(project_id: int, db: AsyncSession = Depends(get_db)):
     """Project-level safety risk score and violation breakdown."""
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     all_risks = (await db.execute(
         select(WorkerSafetyRisk).where(WorkerSafetyRisk.project_id == project_id)

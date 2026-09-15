@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.database.connection import get_db
+from app.utils.auth_deps import get_project_or_404
 from typing import Optional
 from app.models.models import Project, ScheduleActivity, FieldReport, Risk, User, ProjectMember
 from app.schemas.schemas import ProjectCreate, ProjectOut
@@ -79,10 +80,7 @@ async def get_project(project_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
     await db.delete(project)
     await db.commit()
     return {"success": True, "message": f"Project '{project.name}' deleted"}

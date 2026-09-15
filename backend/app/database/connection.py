@@ -40,6 +40,7 @@ def get_engine_and_url():
         )
         return eng, url
     except Exception as e:
+        # Fallback to local sqlite in /tmp on serverless
         fallback_url = "sqlite+aiosqlite:////tmp/progressiq.db" if (os.environ.get("VERCEL") or "/var/task" in os.getcwd()) else "sqlite+aiosqlite:///./progressiq.db"
         eng = create_async_engine(fallback_url, echo=False, connect_args={"check_same_thread": False}, pool_pre_ping=True)
         return eng, fallback_url
@@ -71,6 +72,7 @@ async def ensure_db_ready():
                 await seed_default_users(db)
             _db_initialized = True
         except Exception as e:
+            # Fallback for transient errors
             _db_initialized = True
 
 

@@ -25,10 +25,12 @@ settings = get_settings()
 
 async def aggregate_project_context(db: AsyncSession, project_id: int) -> Dict[str, Any]:
     """Compile comprehensive live state of the project for LLM grounding."""
-    p_res = await db.execute(select(Project).where(Project.id == project_id))
-    project = p_res.scalar_one_or_none()
-    if not project:
+    from app.utils.auth_deps import get_project_or_404
+    try:
+        project = await get_project_or_404(project_id, db)
+    except Exception:
         return {}
+
 
     # 1. Activities & Delays
     act_res = await db.execute(select(ScheduleActivity).where(ScheduleActivity.project_id == project_id))

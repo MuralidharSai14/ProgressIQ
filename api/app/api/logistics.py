@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database.connection import get_db
+from app.utils.auth_deps import get_project_or_404
 from app.models.models import MaterialShipment, Project, ScheduleActivity
 from app.schemas.schemas import (
     MaterialShipmentCreate,
@@ -27,9 +28,7 @@ async def list_materials(
     db: AsyncSession = Depends(get_db),
 ):
     """List all material shipments for a project with summary stats."""
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     query = select(MaterialShipment).where(MaterialShipment.project_id == project_id)
     if status:
@@ -70,9 +69,7 @@ async def create_material(
     db: AsyncSession = Depends(get_db),
 ):
     """Add a new material shipment record."""
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     if data.activity_id:
         act = await db.execute(
@@ -137,9 +134,7 @@ async def delete_material(shipment_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/projects/{project_id}/materials/shortages", response_model=dict)
 async def get_material_shortages(project_id: int, db: AsyncSession = Depends(get_db)):
     """Detect materials in shortage or critical delay that could block activities."""
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     rows = (await db.execute(
         select(MaterialShipment).where(

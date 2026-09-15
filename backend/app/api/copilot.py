@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.database.connection import get_db
 from app.models.models import Project
+from app.utils.auth_deps import get_project_or_404
 from app.services.copilot_service import ask_project_copilot, aggregate_project_context, get_suggested_prompts
 
 router = APIRouter()
@@ -26,10 +27,7 @@ async def ask_copilot(
     """
     Ask the AI Project Copilot a natural language question grounded on real-time project telemetry.
     """
-    p_res = await db.execute(select(Project).where(Project.id == project_id))
-    project = p_res.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     if not req.query.strip():
         raise HTTPException(status_code=422, detail="Query cannot be empty.")
@@ -46,12 +44,10 @@ async def get_copilot_prompts(
     """
     Get dynamic suggested prompts tailored to the project's current state and bottlenecks.
     """
-    p_res = await db.execute(select(Project).where(Project.id == project_id))
-    project = p_res.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     context = await aggregate_project_context(db, project_id)
+
     prompts = get_suggested_prompts(context)
     return {
         "project_id": project_id,

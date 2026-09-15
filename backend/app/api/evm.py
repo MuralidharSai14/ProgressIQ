@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database.connection import get_db
+from app.utils.auth_deps import get_project_or_404
 from app.models.models import Project
 from app.services.evm_engine import compute_project_evm, generate_s_curve_data
 
@@ -21,10 +22,7 @@ async def get_project_evm(
     Get comprehensive Earned Value Management (EVM) metrics for a project:
     PV, EV, AC, SV, CV, SPI, CPI, EAC, ETC, VAC, TCPI, and schedule health.
     """
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     metrics = await compute_project_evm(db, project_id)
     return metrics
@@ -39,10 +37,7 @@ async def get_project_s_curve(
     """
     Get time-series S-Curve cumulative progress points for Planned, Earned, and Forecasted completion.
     """
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     points = await generate_s_curve_data(db, project_id, intervals=intervals)
     return {

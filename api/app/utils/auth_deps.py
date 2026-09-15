@@ -77,6 +77,25 @@ def require_roles(allowed_roles: Sequence[str]):
     return role_checker
 
 
+async def get_project_or_404(project_id: int, db: AsyncSession) -> Project:
+    """
+    Fetch project by ID, with auto-seed fallback for demo projects on serverless cold starts.
+    """
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        try:
+            from app.services.demo_loader import ensure_all_demo_projects_seeded
+            await ensure_all_demo_projects_seeded(db)
+            result = await db.execute(select(Project).where(Project.id == project_id))
+            project = result.scalar_one_or_none()
+        except Exception:
+            pass
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
 async def verify_project_access(
     project_id: int,
     user: Optional[User],
@@ -89,10 +108,8 @@ async def verify_project_access(
     Admins have access to all projects.
     """
     # Fetch project
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
+
 
     # Demo projects are public/shared
     if project.is_demo and not require_write:

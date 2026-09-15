@@ -15,6 +15,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from app.database.connection import get_db
+from app.utils.auth_deps import get_project_or_404
 from app.models.models import Evidence, EvidenceActivityLink, ScheduleActivity, Project
 from app.services.evidence_service import (
     validate_evidence_file, sanitize_filename, determine_evidence_type, analyze_photo_evidence
@@ -42,9 +43,7 @@ async def upload_evidence(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Upload a new evidence item for a project (persists to cloud/local storage)."""
-    proj = await db.execute(select(Project).where(Project.id == project_id))
-    if not proj.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     content = await file.read()
     is_valid, error = validate_evidence_file(file.filename or "", len(content))

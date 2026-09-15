@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.database.connection import get_db
+from app.utils.auth_deps import get_project_or_404
 from app.models.models import (
     Project, ScheduleActivity, FieldReport, ExtractedUpdate,
     ActivityMatch, Risk, ActivityAssessment, VerificationTask, Conflict

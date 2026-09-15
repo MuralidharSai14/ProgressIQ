@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database.connection import get_db
+from app.utils.auth_deps import get_project_or_404
 from app.models.models import Project, ScheduleActivity, LiveFieldUpdate, Evidence, EvidenceActivityLink, User
 from app.schemas.schemas import LiveFieldUpdateOut
 from app.services.storage import save_file
@@ -38,10 +39,7 @@ async def submit_live_field_update(
     Saves evidence photo, updates progress in database, and launches background AI analysis.
     """
     # 1. Validate project & activity
-    proj_res = await db.execute(select(Project).where(Project.id == project_id))
-    project = proj_res.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_project_or_404(project_id, db)
 
     act_res = await db.execute(select(ScheduleActivity).where(ScheduleActivity.id == activity_id, ScheduleActivity.project_id == project_id))
     activity = act_res.scalar_one_or_none()
